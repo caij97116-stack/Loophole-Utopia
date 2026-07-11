@@ -1,5 +1,8 @@
 node_modules
 dist
+assets/
+favicon.svg
+icons.svg
 .DS_Store
 *.local
 .env
