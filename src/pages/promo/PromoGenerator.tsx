@@ -230,51 +230,62 @@ function PosterCanvas({
     canvas.width = w
     canvas.height = h
 
-    // 背景
+    let cancelled = false
+
+    // 先画背景和文字（同步）
     ctx.fillStyle = template.bgColor
     ctx.fillRect(0, 0, w, h)
 
-    const drawAll = () => {
-      // 背景
-      ctx.fillStyle = template.bgColor
-      ctx.fillRect(0, 0, w, h)
+    for (const tf of template.textFields) {
+      const text = texts[tf.id] || tf.defaultText
+      const fontId = fontIds[tf.id] || tf.fontId
+      const fontStyle = getFontStyle(fontId)
+      ctx.font = `${tf.fontSize * displayScale}px "${fontStyle.fontFamily}", ${tf.fontSize * displayScale * 0.7}px sans-serif`
+      ctx.fillStyle = tf.color
+      ctx.textBaseline = 'top'
 
-      // 图片
-      if (uploadedImage && template.imageArea) {
-        const img = new Image()
-        img.src = uploadedImage
-        const area = template.imageArea
+      const lines = text.split('\n')
+      lines.forEach((line, i) => {
+        ctx.fillText(line, tf.x * displayScale, (tf.y + i * tf.fontSize * 1.3) * displayScale)
+      })
+    }
+
+    // 异步加载上传图片
+    if (uploadedImage && template.imageArea) {
+      const img = new Image()
+      img.onload = () => {
+        if (cancelled) return
+        const area = template.imageArea!
         ctx.drawImage(img, area.x * displayScale, area.y * displayScale, area.w * displayScale, area.h * displayScale)
+
+        // 上传图加载完后，再画素材（依赖上传图先画好）
+        drawAssetsAsync()
       }
+      img.src = uploadedImage
+    } else {
+      // 没有上传图，直接画素材
+      drawAssetsAsync()
+    }
 
-      // 文字
-      for (const tf of template.textFields) {
-        const text = texts[tf.id] || tf.defaultText
-        const fontId = fontIds[tf.id] || tf.fontId
-        const fontStyle = getFontStyle(fontId)
-        ctx.font = `${tf.fontSize * displayScale}px "${fontStyle.fontFamily}", ${tf.fontSize * displayScale * 0.7}px sans-serif`
-        ctx.fillStyle = tf.color
-        ctx.textBaseline = 'top'
+    function drawAssetsAsync() {
+      if (cancelled) return
+      if (assignedAssets.length === 0) return
 
-        const lines = text.split('\n')
-        lines.forEach((line, i) => {
-          ctx.fillText(line, tf.x * displayScale, (tf.y + i * tf.fontSize * 1.3) * displayScale)
-        })
-      }
-
-      // 素材 - 绘制在指定位置
       for (const aa of assignedAssets) {
         const svgBlob = new Blob([aa.asset.svg], { type: 'image/svg+xml;charset=utf-8' })
         const url = URL.createObjectURL(svgBlob)
         const img = new Image()
+        img.onload = () => {
+          if (cancelled) return
+          const size = 40 * aa.scale * displayScale
+          ctx.drawImage(img, aa.x * displayScale, aa.y * displayScale, size, size)
+          URL.revokeObjectURL(url)
+        }
         img.src = url
-        const size = 40 * aa.scale * displayScale
-        ctx.drawImage(img, aa.x * displayScale, aa.y * displayScale, size, size)
-        URL.revokeObjectURL(url)
       }
     }
 
-    drawAll()
+    return () => { cancelled = true }
   }, [template, texts, fontIds, uploadedImage, assignedAssets, displayScale])
 
   return (
