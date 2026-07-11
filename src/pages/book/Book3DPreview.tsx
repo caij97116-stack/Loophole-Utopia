@@ -1,302 +1,6 @@
-import { useState, useRef, Suspense, useCallback, useEffect } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Environment, AccumulativeShadows, RandomizedLight } from '@react-three/drei'
-import * as THREE from 'three'
-import { BackButton, Section, Card, LoadingFallback } from '@/components/ui'
-
-// ---- 封面图片切分工具 ----
-function splitCoverImage(
-  img: HTMLImageElement,
-  spineRatio: number,
-): { front: string; spine: string; back: string } {
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')!
-  const w = img.width
-  const h = img.height
-
-  const spineW = Math.round(w * spineRatio)
-  const coverW = Math.round((w - spineW) / 2)
-
-  const backStart = 0
-  const spineStart = coverW
-  const frontStart = coverW + spineW
-
-  function crop(sx: number, sw: number): string {
-    canvas.width = sw
-    canvas.height = h
-    ctx.clearRect(0, 0, sw, h)
-    ctx.drawImage(img, sx, 0, sw, h, 0, 0, sw, h)
-    return canvas.toDataURL('image/png')
-  }
-
-  return {
-    back: crop(backStart, coverW),
-    spine: crop(spineStart, spineW),
-    front: crop(frontStart, coverW),
-  }
-}
-
-// ---- 3D 书本模型 ----
-function BookModel({
-  coverImage, spineRatio, bookWidth, bookHeight, coverThickness,
-  spineWidth, isOpen, openAngle, paperColor, edgeColor,
-}: {
-  coverImage: string | null
-  spineRatio: number
-  bookWidth: number
-  bookHeight: number
-  coverThickness: number
-  spineWidth: number
-  isOpen: boolean
-  openAngle: number
-  paperColor: string
-  edgeColor: string
-}) {
-  const rightCoverRef = useRef<THREE.Group>(null!)
-  const pageGroupRef = useRef<THREE.Group>(null!)
-
-  const hw = bookWidth / 2
-  const ct = coverThickness
-  const sw = spineWidth / 2
-
-  // 异步加载封面纹理
-  const [textures, setTextures] = useState<{
-    front: THREE.Texture; spine: THREE.Texture; back: THREE.Texture
-  } | null>(null)
-
-  useEffect(() => {
-    if (!coverImage) { setTextures(null); return }
-    let cancelled = false
-    const img = new Image()
-    img.onload = () => {
-      if (cancelled) return
-      const parts = splitCoverImage(img, spineRatio)
-      const loader = new THREE.TextureLoader()
-      const front = loader.load(parts.front)
-      front.colorSpace = THREE.SRGBColorSpace
-      const spine = loader.load(parts.spine)
-      spine.colorSpace = THREE.SRGBColorSpace
-      const back = loader.load(parts.back)
-      back.colorSpace = THREE.SRGBColorSpace
-      if (!cancelled) setTextures({ front, spine, back })
-    }
-    img.src = coverImage
-    return () => { cancelled = true }
-  }, [coverImage, spineRatio])
-
-  // 翻开动画
-  useFrame(() => {
-    if (rightCoverRef.current) {
-      const target = isOpen ? openAngle : 0
-      rightCoverRef.current.rotation.y = THREE.MathUtils.lerp(
-        rightCoverRef.current.rotation.y, target, 0.08,
-      )
-    }
-    if (pageGroupRef.current) {
-      const target = isOpen ? openAngle * 0.9 : 0
-      pageGroupRef.current.rotation.y = THREE.MathUtils.lerp(
-        pageGroupRef.current.rotation.y, target, 0.08,
-      )
-    }
-  })
-
-  // 页面块总厚度
-  const pageBlockDepth = 0.15
-
-  return (
-    <group position={[0, 0, 0]}>
-      {/* ---- 书脊 ---- */}
-      <mesh position={[0, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[spineWidth, bookHeight, ct + 0.01]} />
-        <meshStandardMaterial
-          {...(textures?.spine ? { map: textures.spine } : { color: '#333333' })}
-          roughness={0.3}
-          metalness={0.03}
-        />
-      </mesh>
-
-      {/* ---- 左封面 = 封底 ---- */}
-      <mesh position={[-sw - hw, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[bookWidth, bookHeight, ct]} />
-        <meshStandardMaterial
-          {...(textures?.back ? { map: textures.back } : { color: '#1e3a5f' })}
-          roughness={0.3}
-          metalness={0.03}
-        />
-      </mesh>
-
-      {/* ---- 书页块（左侧） ---- */}
-      <mesh position={[-sw, 0, ct / 2 + pageBlockDepth / 2]} castShadow receiveShadow>
-        <boxGeometry args={[bookWidth - 0.06, bookHeight - 0.1, pageBlockDepth]} />
-        <meshStandardMaterial color={paperColor} roughness={0.85} metalness={0} />
-      </mesh>
-      {/* 书口侧面 */}
-      <mesh position={[bookWidth / 2 - sw - 0.03, 0, ct / 2 + pageBlockDepth / 2]} castShadow>
-        <boxGeometry args={[0.015, bookHeight - 0.1, pageBlockDepth]} />
-        <meshStandardMaterial
-          color={edgeColor}
-          roughness={0.5}
-          metalness={edgeColor === '#ffd700' ? 0.7 : 0}
-        />
-      </mesh>
-      {/* 书口上下 */}
-      <mesh position={[-sw, bookHeight / 2 - 0.05, ct / 2 + pageBlockDepth / 2]}>
-        <boxGeometry args={[bookWidth - 0.06, 0.015, pageBlockDepth]} />
-        <meshStandardMaterial
-          color={edgeColor}
-          roughness={0.5}
-          metalness={edgeColor === '#ffd700' ? 0.7 : 0}
-        />
-      </mesh>
-      <mesh position={[-sw, -(bookHeight / 2 - 0.05), ct / 2 + pageBlockDepth / 2]}>
-        <boxGeometry args={[bookWidth - 0.06, 0.015, pageBlockDepth]} />
-        <meshStandardMaterial
-          color={edgeColor}
-          roughness={0.5}
-          metalness={edgeColor === '#ffd700' ? 0.7 : 0}
-        />
-      </mesh>
-
-      {/* ---- 书页块（右侧，翻开） ---- */}
-      <group ref={pageGroupRef} position={[sw + 0.01, 0, ct / 2 + pageBlockDepth / 2]}>
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[bookWidth - 0.06, bookHeight - 0.1, pageBlockDepth]} />
-          <meshStandardMaterial color={paperColor} roughness={0.85} metalness={0} />
-        </mesh>
-        <mesh position={[bookWidth / 2 - 0.03, 0, 0]}>
-          <boxGeometry args={[0.015, bookHeight - 0.1, pageBlockDepth]} />
-          <meshStandardMaterial
-            color={edgeColor}
-            roughness={0.5}
-            metalness={edgeColor === '#ffd700' ? 0.7 : 0}
-          />
-        </mesh>
-      </group>
-
-      {/* ---- 右封面 = 封面（翻开动画） ---- */}
-      <group ref={rightCoverRef} position={[sw + hw, 0, 0]}>
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[bookWidth, bookHeight, ct]} />
-          <meshStandardMaterial
-            {...(textures?.front ? { map: textures.front } : { color: '#1e40af' })}
-            roughness={0.3}
-            metalness={0.03}
-          />
-        </mesh>
-      </group>
-
-      {/* ---- 书签带 ---- */}
-      <mesh position={[0, -bookHeight / 2 + 0.5, ct / 2 + pageBlockDepth + 0.01]} castShadow>
-        <boxGeometry args={[0.03, 0.6, 0.005]} />
-        <meshStandardMaterial color="#e74c3c" roughness={0.5} metalness={0} />
-      </mesh>
-      {/* 书签带垂落部分 */}
-      <mesh position={[0, -bookHeight / 2, ct / 2 + pageBlockDepth + 0.01]}>
-        <boxGeometry args={[0.03, 0.3, 0.005]} />
-        <meshStandardMaterial color="#e74c3c" roughness={0.5} metalness={0} />
-      </mesh>
-    </group>
-  )
-}
-
-// ---- 3D 场景 ----
-function BookScene(props: {
-  coverImage: string | null
-  spineRatio: number
-  bookWidth: number
-  bookHeight: number
-  coverThickness: number
-  spineWidth: number
-  isOpen: boolean
-  openAngle: number
-  paperColor: string
-  edgeColor: string
-  bgColor: string
-  transparentBg: boolean
-}) {
-  const { gl, scene } = useThree()
-
-  useEffect(() => {
-    if (props.transparentBg) {
-      gl.setClearColor(0x000000, 0)
-      scene.background = null
-    } else {
-      gl.setClearColor(new THREE.Color(props.bgColor), 1)
-      scene.background = new THREE.Color(props.bgColor)
-    }
-  }, [props.bgColor, props.transparentBg, gl, scene])
-
-  return (
-    <>
-      {/* 摄影棚环境 - 提供真实反射/光照 */}
-      <Environment preset="studio" background={false} />
-
-      {/* 3点摄影棚灯光 */}
-      <ambientLight intensity={0.35} />
-      {/* 主光 */}
-      <directionalLight
-        position={[5, 8, 5]}
-        intensity={3.5}
-        castShadow
-        shadow-mapSize={1024}
-        shadow-bias={-0.0001}
-      />
-      {/* 补光 */}
-      <directionalLight position={[-3, 3, -2]} intensity={1.2} />
-      {/* 顶光 */}
-      <spotLight
-        position={[0, 5, 0]}
-        intensity={2.0}
-        angle={0.5}
-        penumbra={0.5}
-        castShadow
-      />
-      {/* 底部补光 */}
-      <directionalLight position={[0, -1, 3]} intensity={0.5} />
-
-      <BookModel
-        coverImage={props.coverImage}
-        spineRatio={props.spineRatio}
-        bookWidth={props.bookWidth}
-        bookHeight={props.bookHeight}
-        coverThickness={props.coverThickness}
-        spineWidth={props.spineWidth}
-        isOpen={props.isOpen}
-        openAngle={props.openAngle}
-        paperColor={props.paperColor}
-        edgeColor={props.edgeColor}
-      />
-
-      <OrbitControls
-        enablePan={true}
-        enableZoom={true}
-        enableRotate={true}
-        minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI * 5 / 6}
-        minDistance={3}
-        maxDistance={12}
-        autoRotate={!props.isOpen}
-        autoRotateSpeed={0.8}
-      />
-
-      {/* 柔和阴影 */}
-      <AccumulativeShadows
-        position={[0, -props.bookHeight / 2 - 0.3, 0]}
-        frames={60}
-        alphaTest={0.85}
-        scale={10}
-        opacity={0.4}
-      >
-        <RandomizedLight
-          amount={4}
-          radius={6}
-          intensity={1.5}
-          position={[5, 5, 5]}
-        />
-      </AccumulativeShadows>
-    </>
-  )
-}
+import { useState, useCallback, useEffect } from 'react'
+import { BackButton, Section, Card, ModelViewer } from '@/components/ui'
+import { generateBookGLB } from '@/utils/glbGenerator'
 
 // ---- 判型预设 ----
 const formatPresets = [
@@ -334,16 +38,13 @@ export default function Book3DPreview() {
   const [bgColor, setBgColor] = useState('#e8e8e8')
   const [transparentBg, setTransparentBg] = useState(false)
   const [downloadRes, setDownloadRes] = useState(1)
+  const [glbUrl, setGlbUrl] = useState<string | null>(null)
+  const [glbLoading, setGlbLoading] = useState(false)
 
   const preset = formatPresets.find((f) => f.id === format)!
   const bookWidth = format === 'custom' ? customW : preset.w
   const bookHeight = format === 'custom' ? customH : preset.h
   const actualSpine = format === 'custom' ? spineWidth : preset.spine
-
-  const scale3D = 0.018
-  const modelW = bookWidth * scale3D
-  const modelH = bookHeight * scale3D
-  const modelSpine = actualSpine * scale3D
 
   const activeEdgeColor = edgeColorOptions.find((e) => e.id === edgeColor)!.color
 
@@ -358,19 +59,46 @@ export default function Book3DPreview() {
     reader.readAsDataURL(file)
   }, [])
 
+  // GLB 模型生成
+  useEffect(() => {
+    let cancelled = false
+    const oldUrl = glbUrl
+
+    async function generate() {
+      setGlbLoading(true)
+      try {
+        const glb = await generateBookGLB({
+          width: bookWidth,
+          height: bookHeight,
+          spineWidth: actualSpine,
+          coverImageDataUrl: coverImage ?? undefined,
+          paperColor,
+          edgeColor: activeEdgeColor,
+          openAngle: isOpen ? Math.PI * 0.55 : 0,
+        })
+        if (cancelled) return
+        const newUrl = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }))
+        setGlbUrl(newUrl)
+        if (oldUrl) URL.revokeObjectURL(oldUrl)
+      } finally {
+        if (!cancelled) setGlbLoading(false)
+      }
+    }
+
+    generate()
+    return () => { cancelled = true }
+  }, [bookWidth, bookHeight, actualSpine, coverImage, paperColor, activeEdgeColor, isOpen])
+
   const handleDownload = useCallback(() => {
-    const canvas = document.querySelector('canvas')
-    if (!canvas) return
+    const viewer = document.querySelector('model-viewer')
+    if (!viewer || !(viewer as any).toBlob) return
     const scale = downloadRes
-    const exportCanvas = document.createElement('canvas')
-    exportCanvas.width = canvas.width * scale
-    exportCanvas.height = canvas.height * scale
-    const ctx = exportCanvas.getContext('2d')!
-    ctx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height)
-    const link = document.createElement('a')
-    link.download = `book-3d-${scale}x.png`
-    link.href = exportCanvas.toDataURL('image/png')
-    link.click()
+    ;(viewer as any).toBlob({ idealAspect: true }).then((blob: Blob) => {
+      const link = document.createElement('a')
+      link.download = `book-3d-${scale}x.png`
+      link.href = URL.createObjectURL(blob)
+      link.click()
+    })
   }, [downloadRes])
 
   return (
@@ -576,38 +304,29 @@ export default function Book3DPreview() {
         </div>
 
         {/* 右侧 3D 渲染区 */}
-        <div className="flex-1 bg-bg-card rounded-2xl overflow-hidden min-h-[500px] relative">
-          <Suspense fallback={<LoadingFallback />}>
-            <Canvas
-              camera={{ position: [0, 0.3, 6.5], fov: 38 }}
-              gl={{
-                antialias: true,
-                alpha: true,
-                preserveDrawingBuffer: true,
-                toneMapping: THREE.ACESFilmicToneMapping,
-                toneMappingExposure: 1.1,
-              }}
-              style={{ width: '100%', height: '100%' }}
-              shadows="soft"
-            >
-              <BookScene
-                coverImage={coverImage}
-                spineRatio={spineRatio}
-                bookWidth={modelW}
-                bookHeight={modelH}
-                coverThickness={0.08}
-                spineWidth={modelSpine}
-                isOpen={isOpen}
-                openAngle={Math.PI * 0.55}
-                paperColor={paperColor}
-                edgeColor={activeEdgeColor}
-                bgColor={bgColor}
-                transparentBg={transparentBg}
-              />
-            </Canvas>
-          </Suspense>
+        <div
+          className="flex-1 bg-bg-card rounded-2xl overflow-hidden min-h-[500px] relative"
+          style={{ backgroundColor: transparentBg ? 'transparent' : undefined }}
+        >
+          {glbUrl ? (
+            <ModelViewer
+              src={glbUrl}
+              autoRotate={!isOpen}
+              exposure={1.1}
+              shadowIntensity={0.5}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full min-h-[500px]">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin w-10 h-10 border-3 border-primary border-t-transparent rounded-full" />
+                <span className="text-sm text-text-muted">
+                  {glbLoading ? '3D 模型生成中...' : '请配置参数'}
+                </span>
+              </div>
+            </div>
+          )}
 
-          {!coverImage && (
+          {!coverImage && glbUrl && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <p className="text-text-muted text-sm bg-bg-card/80 px-4 py-2 rounded-lg">
                 请先上传封面图片

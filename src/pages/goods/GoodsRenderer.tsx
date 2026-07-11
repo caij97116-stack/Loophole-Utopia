@@ -1,8 +1,7 @@
-import { useState, useRef, useMemo, Suspense, useCallback, useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Environment, AccumulativeShadows, RandomizedLight } from '@react-three/drei'
-import * as THREE from 'three'
-import { BackButton, Card, Section, Tag, LoadingFallback } from '@/components/ui'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { BackButton, Card, Section, Tag, ModelViewer } from '@/components/ui'
+import { generateBadgeGLB, generateAcrylicGLB, generateStickerGLB, generateRubberGLB } from '@/utils/glbGenerator'
+import type { BadgeOptions, AcrylicOptions, StickerOptions, RubberOptions } from '@/utils/glbGenerator'
 
 type GoodsType = 'badge' | 'acrylic' | 'sticker' | 'rubber'
 type DiecutShape = 'heart' | 'star' | 'hexagon' | 'cloud' | 'irregular' | 'diamond' | 'flower'
@@ -85,489 +84,6 @@ const goodsConfigs = [
   },
 ]
 
-// ---- Shape helpers ----
-function createHeartShape(s: number): THREE.Shape {
-  const shape = new THREE.Shape()
-  shape.moveTo(0, s * 0.3)
-  shape.bezierCurveTo(0, s * 0.55, s * 0.3, s * 0.8, s * 0.25, s * 0.95)
-  shape.bezierCurveTo(s * 0.2, s * 1.1, 0, s * 0.7, 0, s * 0.3)
-  shape.bezierCurveTo(0, s * 0.55, -s * 0.3, s * 0.8, -s * 0.25, s * 0.95)
-  shape.bezierCurveTo(-s * 0.2, s * 1.1, 0, s * 0.7, 0, s * 0.3)
-  return shape
-}
-
-function createStarShape(outerR: number, innerR: number, points: number = 5): THREE.Shape {
-  const shape = new THREE.Shape()
-  const totalPoints = points * 2
-  for (let i = 0; i < totalPoints; i++) {
-    const r = i % 2 === 0 ? outerR : innerR
-    const angle = (i / totalPoints) * Math.PI * 2 - Math.PI / 2
-    const x = Math.cos(angle) * r
-    const y = Math.sin(angle) * r
-    if (i === 0) shape.moveTo(x, y)
-    else shape.lineTo(x, y)
-  }
-  shape.closePath()
-  return shape
-}
-
-function createHexagonShape(r: number): THREE.Shape {
-  const shape = new THREE.Shape()
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 - Math.PI / 6
-    const x = Math.cos(a) * r
-    const y = Math.sin(a) * r
-    if (i === 0) shape.moveTo(x, y)
-    else shape.lineTo(x, y)
-  }
-  shape.closePath()
-  return shape
-}
-
-function createCloudShape(r: number): THREE.Shape {
-  const shape = new THREE.Shape()
-  shape.moveTo(-r * 0.6, -r * 0.15)
-  shape.lineTo(r * 0.6, -r * 0.15)
-  shape.absarc(r * 0.5, -r * 0.15, r * 0.25, 0, Math.PI, true)
-  shape.absarc(r * 0.25, r * 0.1, r * 0.3, 0, Math.PI, true)
-  shape.absarc(0, r * 0.15, r * 0.35, 0, Math.PI, true)
-  shape.absarc(-r * 0.25, r * 0.1, r * 0.3, 0, Math.PI, true)
-  shape.absarc(-r * 0.5, -r * 0.15, r * 0.25, 0, Math.PI, true)
-  return shape
-}
-
-function createDiamondShape(r: number): THREE.Shape {
-  const shape = new THREE.Shape()
-  shape.moveTo(0, r)
-  shape.lineTo(r * 0.6, 0)
-  shape.lineTo(0, -r)
-  shape.lineTo(-r * 0.6, 0)
-  shape.closePath()
-  return shape
-}
-
-function createFlowerShape(r: number): THREE.Shape {
-  const shape = new THREE.Shape()
-  const petals = 6
-  for (let i = 0; i < petals * 2; i++) {
-    const angle = (i / (petals * 2)) * Math.PI * 2 - Math.PI / 2
-    const rr = i % 2 === 0 ? r : r * 0.4
-    const x = Math.cos(angle) * rr
-    const y = Math.sin(angle) * rr
-    if (i === 0) shape.moveTo(x, y)
-    else shape.lineTo(x, y)
-  }
-  shape.closePath()
-  return shape
-}
-
-function getDiecutShape(shape: DiecutShape, s: number): THREE.Shape {
-  switch (shape) {
-    case 'heart': return createHeartShape(s)
-    case 'star': return createStarShape(s * 0.9, s * 0.5)
-    case 'hexagon': return createHexagonShape(s * 0.9)
-    case 'cloud': return createCloudShape(s * 0.9)
-    case 'diamond': return createDiamondShape(s * 0.9)
-    case 'flower': return createFlowerShape(s * 0.85)
-    case 'irregular': {
-      const shape = new THREE.Shape()
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2
-        const vr = s * (0.7 + Math.sin(i * 2.5) * 0.3)
-        const x = Math.cos(a) * vr
-        const y = Math.sin(a) * vr
-        if (i === 0) shape.moveTo(x, y)
-        else shape.lineTo(x, y)
-      }
-      shape.closePath()
-      return shape
-    }
-  }
-}
-
-function getDepth(type: GoodsType): number {
-  switch (type) {
-    case 'badge': return 0.12
-    case 'acrylic': return 0.28
-    case 'sticker': return 0.03
-    case 'rubber': return 0.2
-  }
-}
-
-// ---- 3D Goods Model ----
-function GoodsModel({
-  goodsType, shape, scale, effect, baseColor, diecutShape, imageTexture,
-}: {
-  goodsType: GoodsType
-  shape: string
-  scale: number
-  effect: { roughness: number; metalness: number }
-  baseColor: string
-  diecutShape: DiecutShape
-  imageTexture: THREE.Texture | null
-}) {
-  const meshRef = useRef<THREE.Group>(null!)
-  const s = scale * 1.2
-  const depth = getDepth(goodsType)
-  const isBadge = goodsType === 'badge'
-  const isAcrylic = goodsType === 'acrylic'
-  const isSticker = goodsType === 'sticker'
-  const isRubber = goodsType === 'rubber'
-
-  // 异形几何体缓存
-  const diecutGeom = useMemo(() => {
-    if (shape !== 'diecut') return null
-    const sh = getDiecutShape(diecutShape, s)
-    return new THREE.ExtrudeGeometry(sh, {
-      steps: 1, depth, bevelEnabled: true,
-      bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3,
-    })
-  }, [shape, diecutShape, s, depth])
-
-  // 特定形状的几何体
-  const heartGeom = useMemo(() => {
-    if (shape !== 'heart') return null
-    const sh = createHeartShape(s)
-    return new THREE.ExtrudeGeometry(sh, {
-      steps: 1, depth, bevelEnabled: true,
-      bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3,
-    })
-  }, [shape, s, depth])
-
-  const starGeom = useMemo(() => {
-    if (shape !== 'star') return null
-    const sh = createStarShape(s * 0.9, s * 0.5)
-    return new THREE.ExtrudeGeometry(sh, {
-      steps: 1, depth, bevelEnabled: true,
-      bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3,
-    })
-  }, [shape, s, depth])
-
-  const hexGeom = useMemo(() => {
-    if (shape !== 'hexagon') return null
-    const sh = createHexagonShape(s * 0.9)
-    return new THREE.ExtrudeGeometry(sh, {
-      steps: 1, depth, bevelEnabled: true,
-      bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3,
-    })
-  }, [shape, s, depth])
-
-  const diamondGeom = useMemo(() => {
-    if (shape !== 'diamond') return null
-    const sh = createDiamondShape(s * 0.9)
-    return new THREE.ExtrudeGeometry(sh, {
-      steps: 1, depth, bevelEnabled: true,
-      bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3,
-    })
-  }, [shape, s, depth])
-
-  return (
-    <group ref={meshRef} position={[0, 0.05, 0]}>
-      {/* ====== 吧唧 ====== */}
-      {isBadge && shape === 'circle' && (
-        <>
-          {/* 金属底座 - 稍大一圈 */}
-          <mesh castShadow receiveShadow>
-            <cylinderGeometry args={[s * 1.06, s * 1.06, depth * 0.55, 64]} />
-            <meshStandardMaterial color="#d4d4d4" roughness={0.15} metalness={0.95} />
-          </mesh>
-          {/* 设计面 - 略微凸起 */}
-          <mesh castShadow position={[0, depth * 0.28, 0]}>
-            <cylinderGeometry args={[s, s * 0.98, depth * 0.5, 64]} />
-            <meshStandardMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              color={imageTexture ? '#ffffff' : baseColor}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-          {/* 金属边框环 */}
-          <mesh position={[0, depth * 0.28, 0]}>
-            <torusGeometry args={[s * 1.03, s * 0.04, 16, 64]} />
-            <meshStandardMaterial color="#d4d4d4" roughness={0.15} metalness={0.95} />
-          </mesh>
-          {/* 顶面高光模拟（dome effect） */}
-          <mesh position={[0, depth * 0.53 + 0.001, 0]}>
-            <cylinderGeometry args={[s * 0.95, s * 0.95, 0.002, 64]} />
-            <meshStandardMaterial color="#ffffff" roughness={0.05} metalness={0} transparent opacity={0.15} />
-          </mesh>
-          {/* 背面针 */}
-          <mesh position={[0, -(depth * 0.28), 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[s * 0.02, s * 0.02, s * 0.15, 8]} />
-            <meshStandardMaterial color="#888888" roughness={0.3} metalness={0.8} />
-          </mesh>
-        </>
-      )}
-
-      {isBadge && shape === 'square' && (
-        <>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[s * 1.7, depth * 0.55, s * 1.7]} />
-            <meshStandardMaterial color="#d4d4d4" roughness={0.15} metalness={0.95} />
-          </mesh>
-          <mesh castShadow position={[0, depth * 0.28, 0]}>
-            <boxGeometry args={[s * 1.5, depth * 0.5, s * 1.5]} />
-            <meshStandardMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              color={imageTexture ? '#ffffff' : baseColor}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-        </>
-      )}
-
-      {isBadge && (shape === 'heart' || shape === 'star' || shape === 'hexagon' || shape === 'diamond') && (
-        (heartGeom || starGeom || hexGeom || diamondGeom) && (
-          <mesh castShadow receiveShadow
-            geometry={heartGeom || starGeom || hexGeom || diamondGeom || undefined}
-            rotation={[0, 0, 0]}
-          >
-            <meshStandardMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              color={imageTexture ? '#ffffff' : baseColor}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-        )
-      )}
-
-      {/* ====== 亚克力 ====== */}
-      {isAcrylic && shape === 'circle' && (
-        <>
-          <mesh castShadow>
-            <cylinderGeometry args={[s, s, depth, 64]} />
-            <meshPhysicalMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              transparent
-              opacity={0.88}
-              clearcoat={0.1}
-              ior={1.5}
-              reflectivity={0.5}
-              color={imageTexture ? '#ffffff' : '#ffffff'}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-          {/* 边缘高光 */}
-          <mesh position={[0, 0, 0]}>
-            <torusGeometry args={[s * 1.005, s * 0.015, 8, 64]} />
-            <meshStandardMaterial color="#ffffff" roughness={0} metalness={0} transparent opacity={0.3} />
-          </mesh>
-        </>
-      )}
-
-      {isAcrylic && shape === 'rect' && (
-        <>
-          <mesh castShadow>
-            <boxGeometry args={[s * 1.5, depth, s * 2.2]} />
-            <meshPhysicalMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              transparent
-              opacity={0.88}
-              clearcoat={0.1}
-              ior={1.5}
-              reflectivity={0.5}
-              color={imageTexture ? '#ffffff' : '#ffffff'}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-          {/* 边缘高光线 */}
-          <mesh position={[s * 0.75, 0, 0]}>
-            <boxGeometry args={[0.01, depth * 1.1, s * 2.2]} />
-            <meshStandardMaterial color="#ffffff" roughness={0} metalness={0} transparent opacity={0.3} />
-          </mesh>
-          <mesh position={[-s * 0.75, 0, 0]}>
-            <boxGeometry args={[0.01, depth * 1.1, s * 2.2]} />
-            <meshStandardMaterial color="#ffffff" roughness={0} metalness={0} transparent opacity={0.2} />
-          </mesh>
-        </>
-      )}
-
-      {isAcrylic && (shape === 'diecut' || shape === 'heart' || shape === 'star') && (
-        ((diecutGeom || heartGeom || starGeom) && (
-          <mesh castShadow
-            geometry={diecutGeom || heartGeom || starGeom || undefined}
-          >
-            <meshPhysicalMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              transparent
-              opacity={0.88}
-              clearcoat={0.1}
-              ior={1.5}
-              reflectivity={0.5}
-              color={imageTexture ? '#ffffff' : '#ffffff'}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-        ))
-      )}
-
-      {/* 亚克力表面反光 */}
-      {isAcrylic && (
-        <mesh position={[s * 0.2, depth / 2 + 0.005, s * 0.3]} rotation={[-0.1, 0, -0.25]}>
-          <planeGeometry args={[s * 0.4, s * 0.12]} />
-          <meshStandardMaterial color="#ffffff" roughness={0} metalness={0} transparent opacity={0.18} />
-        </mesh>
-      )}
-
-      {/* ====== 贴纸 ====== */}
-      {isSticker && shape === 'circle' && (
-        <mesh castShadow>
-          <cylinderGeometry args={[s, s, depth, 64]} />
-          <meshStandardMaterial
-            roughness={effect.roughness}
-            metalness={effect.metalness}
-            color={imageTexture ? '#ffffff' : baseColor}
-            map={imageTexture ?? undefined}
-          />
-        </mesh>
-      )}
-
-      {isSticker && shape === 'rect' && (
-        <mesh castShadow>
-          <boxGeometry args={[s * 1.5, depth, s * 2.0]} />
-          <meshStandardMaterial
-            roughness={effect.roughness}
-            metalness={effect.metalness}
-            color={imageTexture ? '#ffffff' : baseColor}
-            map={imageTexture ?? undefined}
-          />
-        </mesh>
-      )}
-
-      {isSticker && (shape === 'diecut' || shape === 'heart') && (
-        ((diecutGeom || heartGeom) && (
-          <mesh castShadow geometry={diecutGeom || heartGeom || undefined}>
-            <meshStandardMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              color={imageTexture ? '#ffffff' : baseColor}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-        ))
-      )}
-
-      {/* ====== 橡胶挂件 ====== */}
-      {isRubber && shape === 'circle' && (
-        <>
-          <mesh castShadow>
-            <cylinderGeometry args={[s, s, depth, 64]} />
-            <meshStandardMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              color={imageTexture ? '#ffffff' : baseColor}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-          {/* 挂孔 */}
-          <mesh position={[0, depth / 2 + 0.02, s * 0.85]}>
-            <torusGeometry args={[s * 0.09, s * 0.03, 8, 16]} />
-            <meshStandardMaterial color="#d4cfc8" roughness={0.7} metalness={0} />
-          </mesh>
-        </>
-      )}
-
-      {isRubber && (shape === 'diecut' || shape === 'heart' || shape === 'star') && (
-        (diecutGeom || heartGeom || starGeom) && (
-          <mesh castShadow
-            geometry={diecutGeom || heartGeom || starGeom || undefined}
-          >
-            <meshStandardMaterial
-              roughness={effect.roughness}
-              metalness={effect.metalness}
-              color={imageTexture ? '#ffffff' : baseColor}
-              map={imageTexture ?? undefined}
-            />
-          </mesh>
-        )
-      )}
-
-      {isRubber && (
-        <mesh position={[0, depth / 2 + 0.02, s * 0.85]}>
-          <torusGeometry args={[s * 0.09, s * 0.03, 8, 16]} />
-          <meshStandardMaterial color="#d4cfc8" roughness={0.7} metalness={0} />
-        </mesh>
-      )}
-    </group>
-  )
-}
-
-// ---- 3D Scene ----
-function GoodsScene(props: {
-  goodsType: GoodsType
-  shape: string
-  scale: number
-  effect: { roughness: number; metalness: number }
-  baseColor: string
-  diecutShape: DiecutShape
-  imageTexture: THREE.Texture | null
-}) {
-  return (
-    <>
-      {/* Studio 环境贴图 - 提供真实金属反射 */}
-      <Environment preset="studio" background={false} />
-
-      {/* 3点摄影棚灯光 */}
-      <ambientLight intensity={0.4} />
-      {/* 主光 */}
-      <directionalLight
-        position={[5, 8, 5]}
-        intensity={3.5}
-        castShadow
-        shadow-mapSize={1024}
-        shadow-bias={-0.0001}
-      />
-      {/* 补光 */}
-      <directionalLight position={[-3, 3, -2]} intensity={1.2} />
-      {/* 顶光 */}
-      <spotLight
-        position={[0, 5, 0]}
-        intensity={2.5}
-        angle={0.4}
-        penumbra={0.5}
-        castShadow
-      />
-      {/* 底部补光 - 减少暗面 */}
-      <directionalLight position={[0, -1, 3]} intensity={0.6} />
-
-      <GoodsModel {...props} />
-
-      <OrbitControls
-        enablePan={true}
-        enableZoom={true}
-        enableRotate={true}
-        minPolarAngle={0.2}
-        maxPolarAngle={Math.PI - 0.2}
-        minDistance={1.5}
-        maxDistance={6}
-        autoRotate={true}
-        autoRotateSpeed={1.2}
-      />
-
-      {/* 柔和阴影 */}
-      <AccumulativeShadows
-        position={[0, -1.1, 0]}
-        frames={60}
-        alphaTest={0.85}
-        scale={5}
-        opacity={0.5}
-      >
-        <RandomizedLight
-          amount={4}
-          radius={4}
-          intensity={1.5}
-          position={[5, 5, 5]}
-        />
-      </AccumulativeShadows>
-    </>
-  )
-}
-
 const diecutOptions: { id: DiecutShape; name: string }[] = [
   { id: 'heart', name: '心形' },
   { id: 'star', name: '星形' },
@@ -588,7 +104,7 @@ export default function GoodsRenderer() {
   const [diecutShape, setDiecutShape] = useState<DiecutShape>('heart')
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
-  const [imageTexture, setImageTexture] = useState<THREE.Texture | null>(null)
+  const [glbUrl, setGlbUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const config = goodsConfigs.find((g) => g.type === goodsType)!
@@ -596,17 +112,73 @@ export default function GoodsRenderer() {
   const activeSize = config.sizes.find((s) => s.id === size)!
   const activeEffect = config.effects.find((e) => e.id === effect)!
 
+  // GLB 生成
   useEffect(() => {
-    if (uploadedImage) {
-      const loader = new THREE.TextureLoader()
-      const tex = loader.load(uploadedImage)
-      tex.colorSpace = THREE.SRGBColorSpace
-      setImageTexture(tex)
-      return () => { tex.dispose() }
-    } else {
-      setImageTexture(null)
+    let cancelled = false
+    const oldUrl = glbUrl
+
+    async function generate() {
+      let glb: ArrayBuffer
+      if (goodsType === 'badge') {
+        const glbShape = shape as BadgeOptions['shape']
+        glb = await generateBadgeGLB({
+          shape: glbShape,
+          size: activeSize.scale,
+          roughness: activeEffect.roughness,
+          metalness: activeEffect.metalness,
+          baseColor,
+          imageDataUrl: uploadedImage ?? undefined,
+        } satisfies BadgeOptions)
+      } else if (goodsType === 'acrylic') {
+        const glbShape = (shape === 'rect' ? 'rectangle' : shape) as AcrylicOptions['shape']
+        glb = await generateAcrylicGLB({
+          shape: glbShape,
+          diecutShape,
+          size: activeSize.scale,
+          roughness: activeEffect.roughness,
+          metalness: activeEffect.metalness,
+          imageDataUrl: uploadedImage ?? undefined,
+        } satisfies AcrylicOptions)
+      } else if (goodsType === 'sticker') {
+        const glbShape = (shape === 'rect' ? 'rectangle' : shape) as StickerOptions['shape']
+        glb = await generateStickerGLB({
+          shape: glbShape,
+          diecutShape,
+          size: activeSize.scale,
+          roughness: activeEffect.roughness,
+          metalness: activeEffect.metalness,
+          baseColor,
+          imageDataUrl: uploadedImage ?? undefined,
+        } satisfies StickerOptions)
+      } else {
+        glb = await generateRubberGLB({
+          shape: shape as RubberOptions['shape'],
+          diecutShape,
+          size: activeSize.scale,
+          roughness: activeEffect.roughness,
+          baseColor,
+          imageDataUrl: uploadedImage ?? undefined,
+        } satisfies RubberOptions)
+      }
+
+      if (cancelled) return
+      const newUrl = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }))
+      setGlbUrl(newUrl)
+      if (oldUrl) URL.revokeObjectURL(oldUrl)
     }
-  }, [uploadedImage])
+
+    generate()
+    return () => {
+      cancelled = true
+    }
+  }, [goodsType, shape, size, effect, baseColor, uploadedImage, diecutShape, activeSize.scale, activeEffect.roughness, activeEffect.metalness, glbUrl])
+
+  // 组件卸载时清理 Blob URL
+  useEffect(() => {
+    return () => {
+      if (glbUrl) URL.revokeObjectURL(glbUrl)
+    }
+  }, [])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -806,31 +378,22 @@ export default function GoodsRenderer() {
         </div>
 
         {/* 右侧 3D 渲染区 */}
-        <div className="flex-1 bg-bg-card rounded-2xl overflow-hidden min-h-[500px] relative">
-          <Suspense fallback={<LoadingFallback />}>
-            <Canvas
-              camera={{ position: [0, 0.4, 3.5], fov: 40 }}
-              gl={{
-                antialias: true,
-                alpha: false,
-                preserveDrawingBuffer: true,
-                toneMapping: THREE.ACESFilmicToneMapping,
-                toneMappingExposure: 1.1,
-              }}
-              style={{ width: '100%', height: '100%' }}
-              shadows="soft"
-            >
-              <GoodsScene
-                goodsType={goodsType}
-                shape={shape}
-                scale={activeSize.scale}
-                effect={activeEffect}
-                baseColor={baseColor}
-                diecutShape={diecutShape}
-                imageTexture={imageTexture}
-              />
-            </Canvas>
-          </Suspense>
+        <div className="flex-1 bg-bg-card rounded-2xl overflow-hidden min-h-[500px]">
+          {glbUrl ? (
+            <ModelViewer
+              src={glbUrl}
+              autoRotate={true}
+              exposure={1.1}
+              shadowIntensity={0.6}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin w-10 h-10 border-3 border-primary border-t-transparent rounded-full" />
+                <span className="text-sm text-text-muted">生成 3D 模型中...</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
