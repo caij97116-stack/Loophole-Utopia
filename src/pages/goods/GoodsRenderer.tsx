@@ -194,28 +194,6 @@ function getDepth(type: GoodsType): number {
   }
 }
 
-// ---- Environment generator ----
-function createStudioEnvironment() {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
-  const ctx = canvas.getContext('2d')!
-
-  // 柔和渐变背景模拟摄影棚
-  const gradient = ctx.createRadialGradient(128, 140, 20, 128, 128, 200)
-  gradient.addColorStop(0, '#ffffff')
-  gradient.addColorStop(0.3, '#f5f5f5')
-  gradient.addColorStop(0.6, '#e8e8e8')
-  gradient.addColorStop(1, '#c8c8c8')
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 256, 256)
-
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.mapping = THREE.EquirectangularReflectionMapping
-  return tex
-}
-
 // ---- 3D Goods Model ----
 function GoodsModel({
   goodsType, shape, scale, effect, baseColor, diecutShape, imageTexture,
@@ -235,55 +213,6 @@ function GoodsModel({
   const isAcrylic = goodsType === 'acrylic'
   const isSticker = goodsType === 'sticker'
   const isRubber = goodsType === 'rubber'
-
-  // 设计面材质
-  const designMat = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      roughness: effect.roughness,
-      metalness: effect.metalness,
-    })
-    if (imageTexture) {
-      mat.map = imageTexture
-      mat.color.set('#ffffff')
-    } else {
-      mat.color.set(baseColor)
-    }
-    return mat
-  }, [baseColor, effect.roughness, effect.metalness, imageTexture])
-
-  // 金属底座材质（吧唧）
-  const metalMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: isBadge ? '#d4d4d4' : '#c0c0c0',
-    roughness: 0.15,
-    metalness: 0.95,
-  }), [isBadge])
-
-  // 亚克力透明材质
-  const acrylicMat = useMemo(() => {
-    const mat = new THREE.MeshPhysicalMaterial({
-      roughness: effect.roughness,
-      metalness: effect.metalness,
-      transparent: true,
-      opacity: 0.88,
-      clearcoat: 0.1,
-      ior: 1.5,
-      reflectivity: 0.5,
-    })
-    if (imageTexture) {
-      mat.map = imageTexture
-      mat.color.set('#ffffff')
-    } else {
-      mat.color.set('#ffffff')
-    }
-    return mat
-  }, [effect.roughness, effect.metalness, imageTexture])
-
-  // 橡胶材质
-  const rubberMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: '#d4cfc8',
-    roughness: 0.7,
-    metalness: 0,
-  }), [])
 
   // 异形几何体缓存
   const diecutGeom = useMemo(() => {
@@ -340,19 +269,24 @@ function GoodsModel({
           {/* 金属底座 - 稍大一圈 */}
           <mesh castShadow receiveShadow>
             <cylinderGeometry args={[s * 1.06, s * 1.06, depth * 0.55, 64]} />
-            <primitive object={metalMat} attach="material" />
+            <meshStandardMaterial color="#d4d4d4" roughness={0.15} metalness={0.95} />
           </mesh>
           {/* 设计面 - 略微凸起 */}
           <mesh castShadow position={[0, depth * 0.28, 0]}>
             <cylinderGeometry args={[s, s * 0.98, depth * 0.5, 64]} />
-            <primitive object={designMat} attach="material" />
+            <meshStandardMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              color={imageTexture ? '#ffffff' : baseColor}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
           {/* 金属边框环 */}
           <mesh position={[0, depth * 0.28, 0]}>
             <torusGeometry args={[s * 1.03, s * 0.04, 16, 64]} />
-            <primitive object={metalMat} attach="material" />
+            <meshStandardMaterial color="#d4d4d4" roughness={0.15} metalness={0.95} />
           </mesh>
-          {/* 顶面高光模拟 */}
+          {/* 顶面高光模拟（dome effect） */}
           <mesh position={[0, depth * 0.53 + 0.001, 0]}>
             <cylinderGeometry args={[s * 0.95, s * 0.95, 0.002, 64]} />
             <meshStandardMaterial color="#ffffff" roughness={0.05} metalness={0} transparent opacity={0.15} />
@@ -369,11 +303,16 @@ function GoodsModel({
         <>
           <mesh castShadow receiveShadow>
             <boxGeometry args={[s * 1.7, depth * 0.55, s * 1.7]} />
-            <primitive object={metalMat} attach="material" />
+            <meshStandardMaterial color="#d4d4d4" roughness={0.15} metalness={0.95} />
           </mesh>
           <mesh castShadow position={[0, depth * 0.28, 0]}>
             <boxGeometry args={[s * 1.5, depth * 0.5, s * 1.5]} />
-            <primitive object={designMat} attach="material" />
+            <meshStandardMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              color={imageTexture ? '#ffffff' : baseColor}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
         </>
       )}
@@ -384,7 +323,12 @@ function GoodsModel({
             geometry={heartGeom || starGeom || hexGeom || diamondGeom || undefined}
             rotation={[0, 0, 0]}
           >
-            <primitive object={designMat} attach="material" />
+            <meshStandardMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              color={imageTexture ? '#ffffff' : baseColor}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
         )
       )}
@@ -394,7 +338,17 @@ function GoodsModel({
         <>
           <mesh castShadow>
             <cylinderGeometry args={[s, s, depth, 64]} />
-            <primitive object={acrylicMat} attach="material" />
+            <meshPhysicalMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              transparent
+              opacity={0.88}
+              clearcoat={0.1}
+              ior={1.5}
+              reflectivity={0.5}
+              color={imageTexture ? '#ffffff' : '#ffffff'}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
           {/* 边缘高光 */}
           <mesh position={[0, 0, 0]}>
@@ -408,7 +362,17 @@ function GoodsModel({
         <>
           <mesh castShadow>
             <boxGeometry args={[s * 1.5, depth, s * 2.2]} />
-            <primitive object={acrylicMat} attach="material" />
+            <meshPhysicalMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              transparent
+              opacity={0.88}
+              clearcoat={0.1}
+              ior={1.5}
+              reflectivity={0.5}
+              color={imageTexture ? '#ffffff' : '#ffffff'}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
           {/* 边缘高光线 */}
           <mesh position={[s * 0.75, 0, 0]}>
@@ -427,7 +391,17 @@ function GoodsModel({
           <mesh castShadow
             geometry={diecutGeom || heartGeom || starGeom || undefined}
           >
-            <primitive object={acrylicMat} attach="material" />
+            <meshPhysicalMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              transparent
+              opacity={0.88}
+              clearcoat={0.1}
+              ior={1.5}
+              reflectivity={0.5}
+              color={imageTexture ? '#ffffff' : '#ffffff'}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
         ))
       )}
@@ -444,21 +418,36 @@ function GoodsModel({
       {isSticker && shape === 'circle' && (
         <mesh castShadow>
           <cylinderGeometry args={[s, s, depth, 64]} />
-          <primitive object={designMat} attach="material" />
+          <meshStandardMaterial
+            roughness={effect.roughness}
+            metalness={effect.metalness}
+            color={imageTexture ? '#ffffff' : baseColor}
+            map={imageTexture ?? undefined}
+          />
         </mesh>
       )}
 
       {isSticker && shape === 'rect' && (
         <mesh castShadow>
           <boxGeometry args={[s * 1.5, depth, s * 2.0]} />
-          <primitive object={designMat} attach="material" />
+          <meshStandardMaterial
+            roughness={effect.roughness}
+            metalness={effect.metalness}
+            color={imageTexture ? '#ffffff' : baseColor}
+            map={imageTexture ?? undefined}
+          />
         </mesh>
       )}
 
       {isSticker && (shape === 'diecut' || shape === 'heart') && (
         ((diecutGeom || heartGeom) && (
           <mesh castShadow geometry={diecutGeom || heartGeom || undefined}>
-            <primitive object={designMat} attach="material" />
+            <meshStandardMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              color={imageTexture ? '#ffffff' : baseColor}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
         ))
       )}
@@ -468,12 +457,17 @@ function GoodsModel({
         <>
           <mesh castShadow>
             <cylinderGeometry args={[s, s, depth, 64]} />
-            <primitive object={designMat} attach="material" />
+            <meshStandardMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              color={imageTexture ? '#ffffff' : baseColor}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
           {/* 挂孔 */}
           <mesh position={[0, depth / 2 + 0.02, s * 0.85]}>
             <torusGeometry args={[s * 0.09, s * 0.03, 8, 16]} />
-            <primitive object={rubberMat} attach="material" />
+            <meshStandardMaterial color="#d4cfc8" roughness={0.7} metalness={0} />
           </mesh>
         </>
       )}
@@ -483,7 +477,12 @@ function GoodsModel({
           <mesh castShadow
             geometry={diecutGeom || heartGeom || starGeom || undefined}
           >
-            <primitive object={designMat} attach="material" />
+            <meshStandardMaterial
+              roughness={effect.roughness}
+              metalness={effect.metalness}
+              color={imageTexture ? '#ffffff' : baseColor}
+              map={imageTexture ?? undefined}
+            />
           </mesh>
         )
       )}
@@ -491,7 +490,7 @@ function GoodsModel({
       {isRubber && (
         <mesh position={[0, depth / 2 + 0.02, s * 0.85]}>
           <torusGeometry args={[s * 0.09, s * 0.03, 8, 16]} />
-          <primitive object={rubberMat} attach="material" />
+          <meshStandardMaterial color="#d4cfc8" roughness={0.7} metalness={0} />
         </mesh>
       )}
     </group>
@@ -508,12 +507,10 @@ function GoodsScene(props: {
   diecutShape: DiecutShape
   imageTexture: THREE.Texture | null
 }) {
-  const envMap = useMemo(() => createStudioEnvironment(), [])
-
   return (
     <>
-      {/* 环境贴图 - 提供真实反射 */}
-      <Environment map={envMap} />
+      {/* Studio 环境贴图 - 提供真实金属反射 */}
+      <Environment preset="studio" background={false} />
 
       {/* 3点摄影棚灯光 */}
       <ambientLight intensity={0.4} />

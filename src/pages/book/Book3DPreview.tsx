@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, Suspense, useCallback, useEffect } from 'react'
+import { useState, useRef, Suspense, useCallback, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Environment, AccumulativeShadows, RandomizedLight } from '@react-three/drei'
 import * as THREE from 'three'
@@ -36,41 +36,6 @@ function splitCoverImage(
   }
 }
 
-function createCanvasTexture(dataUrl: string): THREE.CanvasTexture {
-  const img = new Image()
-  img.src = dataUrl
-  const canvas = document.createElement('canvas')
-  canvas.width = img.width || 512
-  canvas.height = img.height || 512
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(img, 0, 0)
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.needsUpdate = true
-  return tex
-}
-
-// ---- 摄影棚环境贴图 ----
-function createStudioEnvironment() {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
-  const ctx = canvas.getContext('2d')!
-
-  const gradient = ctx.createRadialGradient(128, 140, 20, 128, 128, 200)
-  gradient.addColorStop(0, '#ffffff')
-  gradient.addColorStop(0.3, '#f5f5f5')
-  gradient.addColorStop(0.6, '#e8e8e8')
-  gradient.addColorStop(1, '#c8c8c8')
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 256, 256)
-
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.mapping = THREE.EquirectangularReflectionMapping
-  return tex
-}
-
 // ---- 3D 书本模型 ----
 function BookModel({
   coverImage, spineRatio, bookWidth, bookHeight, coverThickness,
@@ -94,59 +59,30 @@ function BookModel({
   const ct = coverThickness
   const sw = spineWidth / 2
 
-  // 纸张材质
-  const paperMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(paperColor),
-    roughness: 0.85,
-    metalness: 0,
-  }), [paperColor])
+  // 异步加载封面纹理
+  const [textures, setTextures] = useState<{
+    front: THREE.Texture; spine: THREE.Texture; back: THREE.Texture
+  } | null>(null)
 
-  // 书口颜色（侧面纸张颜色）
-  const edgeMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(edgeColor),
-    roughness: 0.5,
-    metalness: edgeColor === '#ffd700' ? 0.7 : 0,
-  }), [edgeColor])
-
-  // 封面纹理
-  const textures = useMemo(() => {
-    if (!coverImage) return null
+  useEffect(() => {
+    if (!coverImage) { setTextures(null); return }
+    let cancelled = false
     const img = new Image()
-    img.src = coverImage
-    try {
+    img.onload = () => {
+      if (cancelled) return
       const parts = splitCoverImage(img, spineRatio)
-      return {
-        front: createCanvasTexture(parts.front),
-        spine: createCanvasTexture(parts.spine),
-        back: createCanvasTexture(parts.back),
-      }
-    } catch {
-      const tex = createCanvasTexture(coverImage)
-      return { front: tex, spine: tex, back: tex }
+      const loader = new THREE.TextureLoader()
+      const front = loader.load(parts.front)
+      front.colorSpace = THREE.SRGBColorSpace
+      const spine = loader.load(parts.spine)
+      spine.colorSpace = THREE.SRGBColorSpace
+      const back = loader.load(parts.back)
+      back.colorSpace = THREE.SRGBColorSpace
+      if (!cancelled) setTextures({ front, spine, back })
     }
+    img.src = coverImage
+    return () => { cancelled = true }
   }, [coverImage, spineRatio])
-
-  // 封面材质 - 微光泽
-  const frontMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.03 })
-    if (textures?.front) m.map = textures.front
-    else m.color = new THREE.Color('#1e40af')
-    return m
-  }, [textures])
-
-  const spineMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.03 })
-    if (textures?.spine) m.map = textures.spine
-    else m.color = new THREE.Color('#333333')
-    return m
-  }, [textures])
-
-  const backMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.03 })
-    if (textures?.back) m.map = textures.back
-    else m.color = new THREE.Color('#1e3a5f')
-    return m
-  }, [textures])
 
   // 翻开动画
   useFrame(() => {
@@ -172,44 +108,68 @@ function BookModel({
       {/* ---- 书脊 ---- */}
       <mesh position={[0, 0, 0]} castShadow receiveShadow>
         <boxGeometry args={[spineWidth, bookHeight, ct + 0.01]} />
-        <primitive object={spineMat} attach="material" />
+        <meshStandardMaterial
+          {...(textures?.spine ? { map: textures.spine } : { color: '#333333' })}
+          roughness={0.3}
+          metalness={0.03}
+        />
       </mesh>
 
       {/* ---- 左封面 = 封底 ---- */}
       <mesh position={[-sw - hw, 0, 0]} castShadow receiveShadow>
         <boxGeometry args={[bookWidth, bookHeight, ct]} />
-        <primitive object={backMat} attach="material" />
+        <meshStandardMaterial
+          {...(textures?.back ? { map: textures.back } : { color: '#1e3a5f' })}
+          roughness={0.3}
+          metalness={0.03}
+        />
       </mesh>
 
       {/* ---- 书页块（左侧） ---- */}
       <mesh position={[-sw, 0, ct / 2 + pageBlockDepth / 2]} castShadow receiveShadow>
         <boxGeometry args={[bookWidth - 0.06, bookHeight - 0.1, pageBlockDepth]} />
-        <primitive object={paperMat} attach="material" />
+        <meshStandardMaterial color={paperColor} roughness={0.85} metalness={0} />
       </mesh>
       {/* 书口侧面 */}
       <mesh position={[bookWidth / 2 - sw - 0.03, 0, ct / 2 + pageBlockDepth / 2]} castShadow>
         <boxGeometry args={[0.015, bookHeight - 0.1, pageBlockDepth]} />
-        <primitive object={edgeMat} attach="material" />
+        <meshStandardMaterial
+          color={edgeColor}
+          roughness={0.5}
+          metalness={edgeColor === '#ffd700' ? 0.7 : 0}
+        />
       </mesh>
       {/* 书口上下 */}
       <mesh position={[-sw, bookHeight / 2 - 0.05, ct / 2 + pageBlockDepth / 2]}>
         <boxGeometry args={[bookWidth - 0.06, 0.015, pageBlockDepth]} />
-        <primitive object={edgeMat} attach="material" />
+        <meshStandardMaterial
+          color={edgeColor}
+          roughness={0.5}
+          metalness={edgeColor === '#ffd700' ? 0.7 : 0}
+        />
       </mesh>
       <mesh position={[-sw, -(bookHeight / 2 - 0.05), ct / 2 + pageBlockDepth / 2]}>
         <boxGeometry args={[bookWidth - 0.06, 0.015, pageBlockDepth]} />
-        <primitive object={edgeMat} attach="material" />
+        <meshStandardMaterial
+          color={edgeColor}
+          roughness={0.5}
+          metalness={edgeColor === '#ffd700' ? 0.7 : 0}
+        />
       </mesh>
 
       {/* ---- 书页块（右侧，翻开） ---- */}
       <group ref={pageGroupRef} position={[sw + 0.01, 0, ct / 2 + pageBlockDepth / 2]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[bookWidth - 0.06, bookHeight - 0.1, pageBlockDepth]} />
-          <primitive object={paperMat} attach="material" />
+          <meshStandardMaterial color={paperColor} roughness={0.85} metalness={0} />
         </mesh>
         <mesh position={[bookWidth / 2 - 0.03, 0, 0]}>
           <boxGeometry args={[0.015, bookHeight - 0.1, pageBlockDepth]} />
-          <primitive object={edgeMat} attach="material" />
+          <meshStandardMaterial
+            color={edgeColor}
+            roughness={0.5}
+            metalness={edgeColor === '#ffd700' ? 0.7 : 0}
+          />
         </mesh>
       </group>
 
@@ -217,7 +177,11 @@ function BookModel({
       <group ref={rightCoverRef} position={[sw + hw, 0, 0]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[bookWidth, bookHeight, ct]} />
-          <primitive object={frontMat} attach="material" />
+          <meshStandardMaterial
+            {...(textures?.front ? { map: textures.front } : { color: '#1e40af' })}
+            roughness={0.3}
+            metalness={0.03}
+          />
         </mesh>
       </group>
 
@@ -251,7 +215,6 @@ function BookScene(props: {
   transparentBg: boolean
 }) {
   const { gl, scene } = useThree()
-  const envMap = useMemo(() => createStudioEnvironment(), [])
 
   useEffect(() => {
     if (props.transparentBg) {
@@ -265,8 +228,8 @@ function BookScene(props: {
 
   return (
     <>
-      {/* 环境贴图 - 提供真实反射 */}
-      <Environment map={envMap} />
+      {/* 摄影棚环境 - 提供真实反射/光照 */}
+      <Environment preset="studio" background={false} />
 
       {/* 3点摄影棚灯光 */}
       <ambientLight intensity={0.35} />
