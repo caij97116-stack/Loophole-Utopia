@@ -2,7 +2,7 @@ import { useState, useRef, Suspense, useCallback, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Environment, AccumulativeShadows, RandomizedLight } from '@react-three/drei'
 import * as THREE from 'three'
-import { BackButton, Section, Card } from '@/components/ui'
+import { BackButton, Section, Card, LoadingFallback } from '@/components/ui'
 
 // ---- 封面图片切分工具 ----
 function splitCoverImage(
@@ -295,17 +295,6 @@ function BookScene(props: {
         />
       </AccumulativeShadows>
     </>
-  )
-}
-
-function LoadingFallback() {
-  return (
-    <div className="flex items-center justify-center h-full w-full bg-bg-card">
-      <div className="flex flex-col items-center gap-3">
-        <div className="animate-spin w-10 h-10 border-3 border-primary border-t-transparent rounded-full" />
-        <span className="text-sm text-text-muted">3D 引擎初始化中...</span>
-      </div>
-    </div>
   )
 }
 
