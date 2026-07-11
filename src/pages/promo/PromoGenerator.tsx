@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { BackButton, Section, Card, Tabs } from '@/components/ui'
 import { allFonts, getFontStyle } from '@/data/fonts'
-import { svgAssets, getCategories, type SvgAsset } from '@/data/assets'
+import { svgAssets, getCategories, searchAssets, type SvgAsset } from '@/data/assets'
 
 // ====== 海报模板 ======
 interface PosterTemplate {
@@ -17,38 +17,38 @@ interface PosterTemplate {
 
 const posterTemplates: PosterTemplate[] = [
   {
-    id: 'backdrop-a3', name: '背面ポスター', category: '摊位海报',
+    id: 'backdrop-a3', name: '背面海报', category: '摊位海报',
     width: 297, height: 420, bgColor: '#ffffff',
     textFields: [
       { id: 'circle-name', label: '社团名', x: 30, y: 50, fontSize: 48, color: '#1a1a1a', defaultText: '社团名', fontId: 'siyuan-sans' },
       { id: 'book-title', label: '新刊标题', x: 30, y: 130, fontSize: 36, color: '#333333', defaultText: '新刊标题', fontId: 'siyuan-serif' },
-      { id: 'event-info', label: '展会信息', x: 30, y: 200, fontSize: 28, color: '#555555', defaultText: 'XX展会 · XX号摊位', fontId: 'siyuan-sans' },
+      { id: 'event-info', label: '展会信息', x: 30, y: 200, fontSize: 28, color: '#555555', defaultText: 'XX展会  XX号摊位', fontId: 'siyuan-sans' },
       { id: 'price', label: '价格', x: 30, y: 260, fontSize: 32, color: '#c0392b', defaultText: '¥XX', fontId: 'montserrat' },
-      { id: 'sns', label: 'SNS/联络', x: 30, y: 320, fontSize: 20, color: '#888888', defaultText: 'Twitter: @xxx / 微博: @xxx', fontId: 'siyuan-sans' },
+      { id: 'sns', label: 'SNS', x: 30, y: 320, fontSize: 20, color: '#888888', defaultText: 'Twitter: @xxx / 微博: @xxx', fontId: 'siyuan-sans' },
     ],
     imageArea: { x: 120, y: 60, w: 150, h: 210 },
   },
   {
-    id: 'table-a4', name: '卓上ポスター', category: '摊位海报',
+    id: 'table-a4', name: '桌上立牌', category: '摊位海报',
     width: 210, height: 297, bgColor: '#fff8f0',
     textFields: [
       { id: 'circle-name', label: '社团名', x: 20, y: 30, fontSize: 40, color: '#1a1a1a', defaultText: '社团名', fontId: 'siyuan-sans' },
       { id: 'book-title', label: '新刊标题', x: 20, y: 90, fontSize: 30, color: '#333333', defaultText: '新刊标题', fontId: 'siyuan-serif' },
       { id: 'price', label: '价格', x: 20, y: 140, fontSize: 28, color: '#c0392b', defaultText: '¥XX', fontId: 'montserrat' },
-      { id: 'event-info', label: '展会信息', x: 20, y: 190, fontSize: 22, color: '#555555', defaultText: 'XX展会 · XX号摊位', fontId: 'siyuan-sans' },
-      { id: 'description', label: '简介', x: 20, y: 230, fontSize: 18, color: '#666666', defaultText: '简介文案...', fontId: 'siyuan-serif' },
+      { id: 'event-info', label: '展会信息', x: 20, y: 190, fontSize: 22, color: '#555555', defaultText: 'XX展会  XX号摊位', fontId: 'siyuan-sans' },
+      { id: 'description', label: '简介', x: 20, y: 240, fontSize: 18, color: '#666666', defaultText: '简介文案...', fontId: 'siyuan-serif' },
     ],
     imageArea: { x: 20, y: 160, w: 170, h: 120 },
   },
   {
-    id: 'menu-a5', name: 'おしながき', category: '菜单/价目表',
+    id: 'menu-a5', name: '菜单/价目表', category: '菜单',
     width: 148, height: 210, bgColor: '#ffffff',
     textFields: [
       { id: 'circle-name', label: '社团名', x: 15, y: 20, fontSize: 28, color: '#1a1a1a', defaultText: '社团名', fontId: 'siyuan-sans' },
       { id: 'book-title', label: '新刊标题', x: 15, y: 60, fontSize: 24, color: '#333333', defaultText: '新刊标题', fontId: 'siyuan-serif' },
       { id: 'price', label: '价格', x: 15, y: 95, fontSize: 22, color: '#c0392b', defaultText: '¥XX', fontId: 'montserrat' },
       { id: 'goods-list', label: '周边列表', x: 15, y: 130, fontSize: 16, color: '#444444', defaultText: '· 周边1 ¥XX\n· 周边2 ¥XX', fontId: 'siyuan-sans' },
-      { id: 'event-info', label: '展会信息', x: 15, y: 180, fontSize: 16, color: '#888888', defaultText: 'XX展会 · XX号', fontId: 'siyuan-sans' },
+      { id: 'event-info', label: '展会', x: 15, y: 180, fontSize: 16, color: '#888888', defaultText: 'XX展会  XX号', fontId: 'siyuan-sans' },
     ],
     imageArea: null,
   },
@@ -58,7 +58,7 @@ const posterTemplates: PosterTemplate[] = [
     textFields: [
       { id: 'circle-name', label: '社团名', x: 20, y: 40, fontSize: 32, color: '#ffffff', defaultText: '社团名', fontId: 'siyuan-sans' },
       { id: 'book-title', label: '新刊标题', x: 20, y: 90, fontSize: 26, color: '#ffffff', defaultText: '新刊标题', fontId: 'siyuan-serif' },
-      { id: 'event-info', label: '展会信息', x: 20, y: 130, fontSize: 20, color: '#ffffff', defaultText: 'XX展会 · XX号摊位', fontId: 'siyuan-sans' },
+      { id: 'event-info', label: '展会', x: 20, y: 130, fontSize: 20, color: '#ffffff', defaultText: 'XX展会  XX号摊位', fontId: 'siyuan-sans' },
     ],
     imageArea: { x: 190, y: 15, w: 95, h: 127 },
   },
@@ -68,7 +68,7 @@ const posterTemplates: PosterTemplate[] = [
     textFields: [
       { id: 'circle-name', label: '社团名', x: 20, y: 30, fontSize: 36, color: '#1a1a1a', defaultText: '社团名', fontId: 'playfair' },
       { id: 'book-title', label: '新刊标题', x: 20, y: 80, fontSize: 28, color: '#333333', defaultText: '新刊标题', fontId: 'siyuan-serif' },
-      { id: 'event-info', label: '展会信息', x: 20, y: 130, fontSize: 22, color: '#888888', defaultText: 'XX展会', fontId: 'siyuan-sans' },
+      { id: 'event-info', label: '展会', x: 20, y: 130, fontSize: 22, color: '#888888', defaultText: 'XX展会', fontId: 'siyuan-sans' },
     ],
     imageArea: { x: 20, y: 150, w: 260, h: 140 },
   },
@@ -79,7 +79,7 @@ const posterTemplates: PosterTemplate[] = [
       { id: 'circle-name', label: '社团名', x: 15, y: 25, fontSize: 28, color: '#1a1a1a', defaultText: '社团名', fontId: 'siyuan-sans' },
       { id: 'book-title', label: '新刊标题', x: 15, y: 65, fontSize: 24, color: '#333333', defaultText: '新刊标题', fontId: 'siyuan-serif' },
       { id: 'price', label: '价格', x: 15, y: 100, fontSize: 24, color: '#c0392b', defaultText: '¥XX', fontId: 'montserrat' },
-      { id: 'event-info', label: '展会信息', x: 15, y: 135, fontSize: 18, color: '#888888', defaultText: 'XX展会 · XX号', fontId: 'siyuan-sans' },
+      { id: 'event-info', label: '展会', x: 15, y: 135, fontSize: 18, color: '#888888', defaultText: 'XX展会  XX号', fontId: 'siyuan-sans' },
     ],
     imageArea: null,
   },
@@ -88,7 +88,7 @@ const posterTemplates: PosterTemplate[] = [
     width: 148, height: 100, bgColor: '#ffffff',
     textFields: [
       { id: 'circle-name', label: '社团名', x: 15, y: 20, fontSize: 20, color: '#1a1a1a', defaultText: '社团名', fontId: 'siyuan-sans' },
-      { id: 'event-info', label: '展会信息', x: 15, y: 50, fontSize: 16, color: '#888888', defaultText: 'XX展会', fontId: 'siyuan-sans' },
+      { id: 'event-info', label: '展会', x: 15, y: 50, fontSize: 16, color: '#888888', defaultText: 'XX展会', fontId: 'siyuan-sans' },
     ],
     imageArea: { x: 15, y: 15, w: 118, h: 70 },
   },
@@ -199,15 +199,24 @@ const textTemplateContents: Record<string, { title: string; content: string; var
   },
 }
 
+// ====== Assigned asset on canvas ======
+interface AssignedAsset {
+  asset: SvgAsset
+  x: number
+  y: number
+  scale: number
+  id: string
+}
+
 // ====== 海报设计器 Canvas ======
 function PosterCanvas({
-  template, texts, fontIds, uploadedImage, assets,
+  template, texts, fontIds, uploadedImage, assignedAssets,
 }: {
   template: PosterTemplate
   texts: Record<string, string>
   fontIds: Record<string, string>
   uploadedImage: string | null
-  assets: SvgAsset[]
+  assignedAssets: AssignedAsset[]
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null!)
   const displayScale = 2
@@ -225,23 +234,48 @@ function PosterCanvas({
     ctx.fillStyle = template.bgColor
     ctx.fillRect(0, 0, w, h)
 
-    // 图片
-    if (uploadedImage && template.imageArea) {
-      const img = new Image()
-      img.src = uploadedImage
-      const area = template.imageArea
-      img.onload = () => {
+    const drawAll = () => {
+      // 背景
+      ctx.fillStyle = template.bgColor
+      ctx.fillRect(0, 0, w, h)
+
+      // 图片
+      if (uploadedImage && template.imageArea) {
+        const img = new Image()
+        img.src = uploadedImage
+        const area = template.imageArea
         ctx.drawImage(img, area.x * displayScale, area.y * displayScale, area.w * displayScale, area.h * displayScale)
-        drawTexts(ctx, template, texts, fontIds, displayScale)
-        drawAssets(ctx, assets, template, displayScale)
       }
-      drawTexts(ctx, template, texts, fontIds, displayScale)
-      drawAssets(ctx, assets, template, displayScale)
-    } else {
-      drawTexts(ctx, template, texts, fontIds, displayScale)
-      drawAssets(ctx, assets, template, displayScale)
+
+      // 文字
+      for (const tf of template.textFields) {
+        const text = texts[tf.id] || tf.defaultText
+        const fontId = fontIds[tf.id] || tf.fontId
+        const fontStyle = getFontStyle(fontId)
+        ctx.font = `${tf.fontSize * displayScale}px "${fontStyle.fontFamily}", ${tf.fontSize * displayScale * 0.7}px sans-serif`
+        ctx.fillStyle = tf.color
+        ctx.textBaseline = 'top'
+
+        const lines = text.split('\n')
+        lines.forEach((line, i) => {
+          ctx.fillText(line, tf.x * displayScale, (tf.y + i * tf.fontSize * 1.3) * displayScale)
+        })
+      }
+
+      // 素材 - 绘制在指定位置
+      for (const aa of assignedAssets) {
+        const svgBlob = new Blob([aa.asset.svg], { type: 'image/svg+xml;charset=utf-8' })
+        const url = URL.createObjectURL(svgBlob)
+        const img = new Image()
+        img.src = url
+        const size = 40 * aa.scale * displayScale
+        ctx.drawImage(img, aa.x * displayScale, aa.y * displayScale, size, size)
+        URL.revokeObjectURL(url)
+      }
     }
-  }, [template, texts, fontIds, uploadedImage, assets, displayScale])
+
+    drawAll()
+  }, [template, texts, fontIds, uploadedImage, assignedAssets, displayScale])
 
   return (
     <canvas
@@ -252,39 +286,6 @@ function PosterCanvas({
   )
 }
 
-function drawTexts(ctx: CanvasRenderingContext2D, template: PosterTemplate, texts: Record<string, string>, fontIds: Record<string, string>, scale: number) {
-  for (const tf of template.textFields) {
-    const text = texts[tf.id] || tf.defaultText
-    const fontId = fontIds[tf.id] || tf.fontId
-    const fontStyle = getFontStyle(fontId)
-    ctx.font = `${tf.fontSize * scale}px ${fontStyle.fontFamily}, ${tf.fontSize * scale * 0.7}px sans-serif`
-    ctx.fillStyle = tf.color
-    ctx.textBaseline = 'top'
-
-    const lines = text.split('\n')
-    lines.forEach((line, i) => {
-      ctx.fillText(line, tf.x * scale, (tf.y + i * tf.fontSize * 1.3) * scale)
-    })
-  }
-}
-
-function drawAssets(ctx: CanvasRenderingContext2D, assets: SvgAsset[], template: PosterTemplate, scale: number) {
-  if (assets.length === 0) return
-  // 将 SVG 素材绘制在画布底部
-  const startY = (template.height - 30) * scale
-  assets.forEach((asset, i) => {
-    const img = new Image()
-    const svgBlob = new Blob([asset.svg], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(svgBlob)
-    img.src = url
-    img.onload = () => {
-      const x = (30 + i * 60) * scale
-      ctx.drawImage(img, x, startY, 40 * scale, 40 * scale)
-      URL.revokeObjectURL(url)
-    }
-  })
-}
-
 // ====== 主页面 ======
 export default function PromoGenerator() {
   const [activeTab, setActiveTab] = useState('poster')
@@ -293,8 +294,9 @@ export default function PromoGenerator() {
   const [posterFonts, setPosterFonts] = useState<Record<string, string>>({})
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [imageFileName, setImageFileName] = useState('')
-  const [selectedAssets, setSelectedAssets] = useState<SvgAsset[]>([])
+  const [assignedAssets, setAssignedAssets] = useState<AssignedAsset[]>([])
   const [assetCategory, setAssetCategory] = useState('全部')
+  const [assetSearch, setAssetSearch] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 文案模板
@@ -304,7 +306,6 @@ export default function PromoGenerator() {
   const posterTemplate = posterTemplates.find((t) => t.id === selectedPoster)!
   const textTemplate = textTemplateContents[selectedTextTemplate]
 
-  // 切换海报模板时重置文字
   const handlePosterChange = useCallback((id: string) => {
     setSelectedPoster(id)
     setPosterTexts({})
@@ -328,6 +329,47 @@ export default function PromoGenerator() {
     link.click()
   }, [posterTemplate])
 
+  const handleAddAsset = useCallback((asset: SvgAsset) => {
+    setAssignedAssets((prev) => {
+      const exists = prev.find((a) => a.asset.id === asset.id)
+      if (exists) return prev
+      return [...prev, {
+        asset,
+        x: 30 + Math.random() * 60,
+        y: 30 + Math.random() * 60,
+        scale: 1,
+        id: `${asset.id}-${Date.now()}`,
+      }]
+    })
+  }, [])
+
+  const handleRemoveAsset = useCallback((id: string) => {
+    setAssignedAssets((prev) => prev.filter((a) => a.id !== id))
+  }, [])
+
+  const handleMoveAsset = useCallback((id: string, dx: number, dy: number) => {
+    setAssignedAssets((prev) => prev.map((a) =>
+      a.id === id ? { ...a, x: a.x + dx, y: a.y + dy } : a,
+    ))
+  }, [])
+
+  const handleScaleAsset = useCallback((id: string, ds: number) => {
+    setAssignedAssets((prev) => prev.map((a) =>
+      a.id === id ? { ...a, scale: Math.max(0.3, Math.min(3, a.scale + ds)) } : a,
+    ))
+  }, [])
+
+  const filteredAssets = (() => {
+    let assets = svgAssets
+    if (assetCategory !== '全部') {
+      assets = assets.filter((a) => a.category === assetCategory)
+    }
+    if (assetSearch.trim()) {
+      assets = searchAssets(assetSearch)
+    }
+    return assets
+  })()
+
   const textPreview = textTemplate.content.replace(/\{(\w+)\}/g, (_, key) => textVariables[key] || `{${key}}`)
 
   const handleCopyText = () => {
@@ -338,7 +380,11 @@ export default function PromoGenerator() {
     <div className="h-full flex flex-col">
       <div className="p-4 pb-0">
         <BackButton to="/promo" label="返回展会宣发" />
-        <Section title="宣发素材生成器" icon="📢" description="海报设计 + 文案模板 · 上传封面图 · 导出高清图" />
+        <Section
+          title="宣发素材生成器"
+          icon="📢"
+          description="海报设计 + 文案模板 · 上传封面图 · 添加素材 · 导出高清图"
+        />
       </div>
 
       <div className="p-4">
@@ -356,36 +402,64 @@ export default function PromoGenerator() {
       {activeTab === 'poster' && (
         <div className="flex-1 flex flex-col lg:flex-row gap-4 px-4 pb-4 min-h-0">
           {/* 左侧控制 */}
-          <div className="lg:w-64 shrink-0 space-y-3 overflow-y-auto">
+          <div className="lg:w-72 shrink-0 space-y-3 overflow-y-auto">
+            {/* 模板选择 */}
             <Card>
               <h3 className="text-sm font-semibold mb-3">模板</h3>
               <div className="flex flex-col gap-1">
                 {posterTemplates.map((t) => (
-                  <button key={t.id} onClick={() => handlePosterChange(t.id)}
-                    className={`text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${selectedPoster === t.id ? 'bg-primary text-white' : 'bg-bg-card border border-border hover:border-primary'}`}>
+                  <button
+                    key={t.id}
+                    onClick={() => handlePosterChange(t.id)}
+                    className={`text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                      selectedPoster === t.id
+                        ? 'bg-primary text-white'
+                        : 'bg-bg-card border border-border hover:border-primary'
+                    }`}
+                  >
                     <span className="font-medium">{t.name}</span>
-                    <span className="ml-2 opacity-70">{t.width}×{t.height}mm</span>
+                    <span className="ml-2 opacity-70">{t.width}x{t.height}mm</span>
                   </button>
                 ))}
               </div>
             </Card>
 
+            {/* 封面图片 */}
             <Card>
               <h3 className="text-sm font-semibold mb-3">封面图片</h3>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
               {uploadedImage ? (
                 <div className="space-y-2">
-                  <img src={uploadedImage} alt="封面" className="w-full h-16 object-cover rounded border border-border" />
+                  <img
+                    src={uploadedImage}
+                    alt="封面"
+                    className="w-full h-16 object-cover rounded border border-border"
+                  />
                   <p className="text-xs text-text-muted truncate">{imageFileName}</p>
-                  <button onClick={() => { setUploadedImage(null); setImageFileName('') }}
-                    className="w-full text-xs text-red-500 hover:underline cursor-pointer">清除</button>
+                  <button
+                    onClick={() => { setUploadedImage(null); setImageFileName('') }}
+                    className="w-full text-xs text-red-500 hover:underline cursor-pointer"
+                  >
+                    清除
+                  </button>
                 </div>
               ) : (
-                <button onClick={() => fileInputRef.current?.click()}
-                  className="w-full px-3 py-2 rounded-lg text-xs border border-dashed border-border hover:border-primary text-text-muted cursor-pointer">+ 上传图片</button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full px-3 py-2 rounded-lg text-xs border border-dashed border-border hover:border-primary text-text-muted cursor-pointer"
+                >
+                  + 上传图片
+                </button>
               )}
             </Card>
 
+            {/* 文字内容 */}
             {posterTemplate.textFields.length > 0 && (
               <Card>
                 <h3 className="text-sm font-semibold mb-3">文字内容</h3>
@@ -396,18 +470,24 @@ export default function PromoGenerator() {
                         <label className="text-xs text-text-muted">{tf.label}</label>
                         <select
                           value={posterFonts[tf.id] || tf.fontId}
-                          onChange={(e) => setPosterFonts((prev) => ({ ...prev, [tf.id]: e.target.value }))}
+                          onChange={(e) =>
+                            setPosterFonts((prev) => ({ ...prev, [tf.id]: e.target.value }))
+                          }
                           className="text-[10px] px-1 py-0.5 rounded border border-border bg-bg"
                         >
                           {allFonts.map((f) => (
-                            <option key={f.id} value={f.id}>{f.name}</option>
+                            <option key={f.id} value={f.id}>
+                              {f.name}
+                            </option>
                           ))}
                         </select>
                       </div>
                       <textarea
                         rows={tf.defaultText.includes('\n') ? 3 : 1}
                         value={posterTexts[tf.id] || ''}
-                        onChange={(e) => setPosterTexts((prev) => ({ ...prev, [tf.id]: e.target.value }))}
+                        onChange={(e) =>
+                          setPosterTexts((prev) => ({ ...prev, [tf.id]: e.target.value }))
+                        }
                         placeholder={tf.defaultText}
                         className="w-full px-2 py-1.5 rounded border border-border bg-bg text-xs mt-0.5 resize-none"
                       />
@@ -417,61 +497,152 @@ export default function PromoGenerator() {
               </Card>
             )}
 
+            {/* 素材库 */}
             <Card>
               <h3 className="text-sm font-semibold mb-3">素材库</h3>
               <div className="flex gap-1 mb-2">
-                <select value={assetCategory} onChange={(e) => setAssetCategory(e.target.value)}
-                  className="flex-1 px-2 py-1 rounded border border-border bg-bg text-xs">
+                <select
+                  value={assetCategory}
+                  onChange={(e) => setAssetCategory(e.target.value)}
+                  className="flex-1 px-2 py-1 rounded border border-border bg-bg text-xs"
+                >
                   <option value="全部">全部分类</option>
-                  {getCategories().map((c) => <option key={c} value={c}>{c}</option>)}
+                  {getCategories().map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
-              <div className="grid grid-cols-3 gap-1 max-h-40 overflow-y-auto">
-                {svgAssets
-                  .filter((a) => assetCategory === '全部' || a.category === assetCategory)
-                  .map((asset) => (
-                    <button key={asset.id}
-                      onClick={() => {
-                        setSelectedAssets((prev) => {
-                          const exists = prev.find((a) => a.id === asset.id)
-                          if (exists) return prev.filter((a) => a.id !== asset.id)
-                          return [...prev, asset]
-                        })
-                      }}
+              <input
+                type="text"
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                placeholder="搜索素材..."
+                className="w-full px-2 py-1 rounded border border-border bg-bg text-xs mb-2"
+              />
+              <div className="grid grid-cols-3 gap-1 max-h-52 overflow-y-auto">
+                {filteredAssets.map((asset) => {
+                  const isAssigned = assignedAssets.some((a) => a.asset.id === asset.id)
+                  return (
+                    <button
+                      key={asset.id}
+                      onClick={() => handleAddAsset(asset)}
+                      disabled={isAssigned}
                       className={`p-1 rounded border text-center cursor-pointer transition-colors ${
-                        selectedAssets.find((a) => a.id === asset.id)
-                          ? 'border-primary bg-primary/10'
+                        isAssigned
+                          ? 'border-primary/30 bg-primary/5 opacity-50'
                           : 'border-border hover:border-primary'
                       }`}
                       title={asset.name}
                     >
                       <div
                         className="w-full h-8 flex items-center justify-center"
-                        dangerouslySetInnerHTML={{ __html: `<svg viewBox="${asset.viewBox}" width="28" height="28"><g>${asset.svg}</g></svg>` }}
+                        dangerouslySetInnerHTML={{
+                          __html: `<svg viewBox="${asset.viewBox}" width="28" height="28"><g>${asset.svg}</g></svg>`,
+                        }}
                       />
                       <span className="text-[8px] text-text-muted block truncate">{asset.name}</span>
                     </button>
-                  ))}
+                  )
+                })}
               </div>
-              {selectedAssets.length > 0 && (
-                <button onClick={() => setSelectedAssets([])}
-                  className="mt-2 w-full text-xs text-red-500 hover:underline cursor-pointer">清除全部素材</button>
-              )}
             </Card>
 
+            {/* 已添加素材 */}
+            {assignedAssets.length > 0 && (
+              <Card>
+                <h3 className="text-sm font-semibold mb-3">
+                  已添加素材 ({assignedAssets.length})
+                </h3>
+                <div className="space-y-2">
+                  {assignedAssets.map((aa) => (
+                    <div
+                      key={aa.id}
+                      className="flex items-center gap-2 p-2 rounded-lg border border-border bg-bg-card"
+                    >
+                      <div
+                        className="w-8 h-8 flex items-center justify-center shrink-0"
+                        dangerouslySetInnerHTML={{
+                          __html: `<svg viewBox="${aa.asset.viewBox}" width="24" height="24"><g>${aa.asset.svg}</g></svg>`,
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs truncate">{aa.asset.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            onClick={() => handleMoveAsset(aa.id, -5, 0)}
+                            className="text-[10px] px-1 rounded border border-border hover:bg-bg"
+                          >
+                            ←
+                          </button>
+                          <button
+                            onClick={() => handleMoveAsset(aa.id, 5, 0)}
+                            className="text-[10px] px-1 rounded border border-border hover:bg-bg"
+                          >
+                            →
+                          </button>
+                          <button
+                            onClick={() => handleMoveAsset(aa.id, 0, -5)}
+                            className="text-[10px] px-1 rounded border border-border hover:bg-bg"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => handleMoveAsset(aa.id, 0, 5)}
+                            className="text-[10px] px-1 rounded border border-border hover:bg-bg"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            onClick={() => handleScaleAsset(aa.id, -0.2)}
+                            className="text-[10px] px-1 rounded border border-border hover:bg-bg"
+                          >
+                            −
+                          </button>
+                          <span className="text-[10px]">{aa.scale.toFixed(1)}x</span>
+                          <button
+                            onClick={() => handleScaleAsset(aa.id, 0.2)}
+                            className="text-[10px] px-1 rounded border border-border hover:bg-bg"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveAsset(aa.id)}
+                        className="text-[10px] text-red-500 hover:underline shrink-0"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* 导出 */}
             <Card>
               <h3 className="text-sm font-semibold mb-3">导出</h3>
-              <button onClick={handleExport}
-                className="w-full px-3 py-2 rounded-lg text-sm font-medium bg-accent text-white cursor-pointer hover:opacity-90 transition-opacity">
+              <button
+                onClick={handleExport}
+                className="w-full px-3 py-2 rounded-lg text-sm font-medium bg-accent text-white cursor-pointer hover:opacity-90 transition-opacity"
+              >
                 导出 PNG
               </button>
-              <p className="text-xs text-text-muted mt-2">{posterTemplate.width}×{posterTemplate.height}mm · 2x高清</p>
+              <p className="text-xs text-text-muted mt-2">
+                {posterTemplate.width}x{posterTemplate.height}mm · 2x 高清
+              </p>
             </Card>
           </div>
 
           {/* 右侧预览 */}
           <div className="flex-1 overflow-auto bg-bg-card rounded-2xl p-4 flex items-start justify-center">
-            <PosterCanvas template={posterTemplate} texts={posterTexts} fontIds={posterFonts} uploadedImage={uploadedImage} assets={selectedAssets} />
+            <PosterCanvas
+              template={posterTemplate}
+              texts={posterTexts}
+              fontIds={posterFonts}
+              uploadedImage={uploadedImage}
+              assignedAssets={assignedAssets}
+            />
           </div>
         </div>
       )}
@@ -484,8 +655,15 @@ export default function PromoGenerator() {
               <h3 className="text-sm font-semibold mb-3">选择模板</h3>
               <div className="flex flex-col gap-1">
                 {textTemplates.map((t) => (
-                  <button key={t.id} onClick={() => { setSelectedTextTemplate(t.id); setTextVariables({}) }}
-                    className={`text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${selectedTextTemplate === t.id ? 'bg-primary text-white' : 'bg-bg-card border border-border hover:border-primary'}`}>
+                  <button
+                    key={t.id}
+                    onClick={() => { setSelectedTextTemplate(t.id); setTextVariables({}) }}
+                    className={`text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                      selectedTextTemplate === t.id
+                        ? 'bg-primary text-white'
+                        : 'bg-bg-card border border-border hover:border-primary'
+                    }`}
+                  >
                     <div className="font-medium">{t.name}</div>
                     <div className="opacity-70">{t.platform}</div>
                   </button>
@@ -499,10 +677,15 @@ export default function PromoGenerator() {
                 {textTemplate.variables.map((v) => (
                   <div key={v}>
                     <label className="text-xs text-text-muted">{v}</label>
-                    <input type="text" value={textVariables[v] || ''}
-                      onChange={(e) => setTextVariables((prev) => ({ ...prev, [v]: e.target.value }))}
+                    <input
+                      type="text"
+                      value={textVariables[v] || ''}
+                      onChange={(e) =>
+                        setTextVariables((prev) => ({ ...prev, [v]: e.target.value }))
+                      }
                       className="w-full px-2 py-1.5 rounded border border-border bg-bg text-xs mt-0.5"
-                      placeholder={`输入${v}`} />
+                      placeholder={`输入${v}`}
+                    />
                   </div>
                 ))}
               </div>
@@ -513,8 +696,12 @@ export default function PromoGenerator() {
             <Card>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm">{textTemplate.title}</h3>
-                <button onClick={handleCopyText}
-                  className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs cursor-pointer hover:opacity-90 transition-opacity">复制文案</button>
+                <button
+                  onClick={handleCopyText}
+                  className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs cursor-pointer hover:opacity-90 transition-opacity"
+                >
+                  复制文案
+                </button>
               </div>
               <div className="bg-bg-card rounded-lg p-4 whitespace-pre-wrap text-sm font-mono leading-relaxed">
                 {textPreview}
