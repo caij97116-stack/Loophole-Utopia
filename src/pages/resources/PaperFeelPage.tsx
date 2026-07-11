@@ -1,4 +1,4 @@
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface PaperFeel {
   name: string
@@ -28,6 +28,7 @@ const paperFeels: PaperFeel[] = [
 export default function PaperFeelPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="纸张手感百科" icon="✋" description="实物感描述、类比推荐、纸样索取指南" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

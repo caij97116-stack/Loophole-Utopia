@@ -1,4 +1,4 @@
-import { Section, Card } from '@/components/ui'
+import { BackButton, Section, Card } from '@/components/ui'
 
 const sections = [
   {
@@ -34,6 +34,7 @@ const sections = [
 export default function CopyrightPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="版权合规指南" icon="⚖️" description="二次创作的法律边界、IP授权、字体商用、海外展会合规" />
 
       <div className="space-y-4">

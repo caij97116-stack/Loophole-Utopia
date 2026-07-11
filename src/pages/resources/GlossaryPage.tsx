@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Tag, Card } from '@/components/ui'
+import { BackButton, Section, Tag, Card } from '@/components/ui'
 import { glossary, type GlossaryTerm } from '@/data/glossary'
 
 const categories = [
@@ -26,6 +26,7 @@ export default function GlossaryPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="同人术语辞典" icon="📖" description={`${glossary.length}+条术语，中日英三语对照，印刷新手指南`} />
 
       <div className="flex flex-wrap items-center gap-3 mb-4">

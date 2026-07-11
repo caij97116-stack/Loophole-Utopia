@@ -1,4 +1,4 @@
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 const proofData = [
   { factory: 'CP官方合作印刷', proofType: '数码打样', cost: '50-100元', time: '2-3天', quality: '较高', notes: '仅限CP参展社团' },
@@ -16,6 +16,7 @@ const checkItems = [
 export default function ProofGuidePage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="试印/打样指南" icon="🔬" description="各厂家试印对比、打样检查清单、质量问题排查" />
 
       <Card className="mb-6">

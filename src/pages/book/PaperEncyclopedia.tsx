@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag, Tabs, Select } from '@/components/ui'
+import { BackButton, Section, Card, Tag, Tabs, Select } from '@/components/ui'
 import { papers, type Paper } from '@/data/papers'
 
 const categoryTabs = [
@@ -27,6 +27,7 @@ export default function PaperEncyclopedia() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section
         title="纸张百科"
         icon="📄"

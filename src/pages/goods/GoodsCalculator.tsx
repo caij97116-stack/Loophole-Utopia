@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card } from '@/components/ui'
+import { Section, Card, BackButton } from '@/components/ui'
 
 interface GoodsCalcItem {
   name: string
@@ -36,6 +36,7 @@ export default function GoodsCalculator() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/goods" label="返回周边制作" />
       <Section title="周边报价计算器" icon="🧮" description="选择周边类型，输入数量，自动估算生产成本" />
 
       <div className="flex flex-col lg:flex-row gap-6">

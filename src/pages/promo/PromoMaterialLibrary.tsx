@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 import { promoMaterials, checklistItems } from '@/data/events'
 
 export default function PromoMaterialLibrary() {
@@ -7,6 +7,7 @@ export default function PromoMaterialLibrary() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/promo" label="返回展会宣发" />
       <Section
         title="宣发素材库"
         icon="📢"

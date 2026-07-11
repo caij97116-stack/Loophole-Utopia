@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 import { bindings, type Binding } from '@/data/bindings'
 
 export default function BindingSelector() {
@@ -28,6 +28,7 @@ export default function BindingSelector() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section
         title="装订方式选型决策器"
         icon="📚"

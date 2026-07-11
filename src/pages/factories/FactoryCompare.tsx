@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Tag } from '@/components/ui'
+import { BackButton, Section, Tag } from '@/components/ui'
 import { factories, type Factory } from '@/data/factories'
 
 const countryLabel: Record<string, string> = { cn: '国内', jp: '日本' }
@@ -18,6 +18,7 @@ export default function FactoryCompare() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/factories" label="返回厂家报价" />
       <Section title="报价对比器" icon="⚖️" description="同时选择最多4家厂家，横向对比价格、质量、交期、评价" />
 
       <div className="flex gap-2 mb-4 flex-wrap">

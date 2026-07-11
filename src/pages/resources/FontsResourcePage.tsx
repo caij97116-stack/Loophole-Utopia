@@ -1,8 +1,9 @@
-import { Section, Card } from '@/components/ui'
+import { BackButton, Section, Card } from '@/components/ui'
 
 export default function FontsResourcePage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="字体与字素资源" icon="🔤" description="3000+可商用字体精选 + 字素素材来源" />
 
       <Card className="mb-6">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag, Tabs } from '@/components/ui'
+import { Section, Card, Tag, Tabs, BackButton } from '@/components/ui'
 import { goodsProcesses, goodsCategories } from '@/data/goodsProcesses'
 import type { GoodsProcess } from '@/data/goodsProcesses'
 
@@ -24,6 +24,7 @@ export default function GoodsProcessLibrary() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/goods" label="返回周边制作" />
       <Section
         title="周边工艺百科"
         icon="🎁"

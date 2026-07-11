@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { Section, Card, Tag, BackButton } from '@/components/ui'
 
 interface GoodsType {
   name: string
@@ -127,6 +127,7 @@ export default function GoodsSelector() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/goods" label="返回周边制作" />
       <Section
         title="周边选型助手"
         icon="🎯"

@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import { Section, Card, Tag, Select, Button } from '@/components/ui'
+import { useState, useRef } from 'react'
+import mammoth from 'mammoth'
+import { BackButton, Section, Card, Tag, Select, Button } from '@/components/ui'
+import { allFonts, zisuLibrary, getFontStyle } from '@/data/fonts'
 
 const layoutStyles = [
   { value: 'center', label: '居中对齐', desc: '标题居中，传统排版' },
@@ -22,20 +24,14 @@ const presets = [
   { value: 'artbook', label: '画集', icon: '🖼️', desc: '画集/摄影集，以图为主' },
 ]
 
-const fonts = [
-  { value: 'siyuan-song', label: '思源宋体', desc: '正文最常用，可读性最佳' },
-  { value: 'lxgw-wenkai', label: '霞鹜文楷', desc: '温柔手写风，适合文艺小说' },
-  { value: 'alibaba', label: '阿里普惠体', desc: '现代无衬线，清晰易读' },
-  { value: 'genwan-mincho', label: '源ノ明朝', desc: '日文小说正文标配' },
-  { value: 'siyuan-black', label: '思源黑体', desc: '标题/对白/注释' },
-  { value: 'noto-serif', label: 'Noto Serif', desc: '英文衬线正文' },
-]
-
 export default function LayoutAssistant() {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const previewScrollRef = useRef<HTMLDivElement>(null)
+
   const [preset, setPreset] = useState('mixed')
   const [style, setStyle] = useState('justify')
-  const [bodyFont, setBodyFont] = useState('siyuan-song')
-  const [titleFont, setTitleFont] = useState('siyuan-black')
+  const [bodyFont, setBodyFont] = useState('siyuan-serif')
+  const [titleFont, setTitleFont] = useState('siyuan-sans')
   const [fontSize, setFontSize] = useState(10.5)
   const [lineHeight, setLineHeight] = useState(1.7)
   const [marginInner, setMarginInner] = useState(20)
@@ -43,16 +39,72 @@ export default function LayoutAssistant() {
   const [wordCount, setWordCount] = useState(50000)
   const [estimatedPages, setEstimatedPages] = useState(0)
 
+  const [uploadedText, setUploadedText] = useState('')
+  const [uploadedFileName, setUploadedFileName] = useState('')
+  const [chapterZisu, setChapterZisu] = useState('')
+  const [pageNumZisu, setPageNumZisu] = useState('')
+
+  const bodyFontStyle = getFontStyle(bodyFont)
+  const titleFontStyle = getFontStyle(titleFont)
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadedFileName(file.name)
+    try {
+      if (file.name.endsWith('.txt')) {
+        const text = await file.text()
+        setUploadedText(text)
+      } else if (file.name.endsWith('.docx')) {
+        const arrayBuffer = await file.arrayBuffer()
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        setUploadedText(result.value)
+      } else {
+        setUploadedText('')
+        setUploadedFileName('')
+      }
+    } catch {
+      setUploadedText('')
+      setUploadedFileName('')
+    }
+  }
+
   const calculatePages = () => {
-    // 粗略估算：A5页面约600-800字/页
     const charsPerPage = Math.round(800 * (10.5 / fontSize))
     const pages = Math.ceil(wordCount / charsPerPage)
-    setEstimatedPages(Math.ceil(pages / 4) * 4) // 调整为4的倍数
+    setEstimatedPages(Math.ceil(pages / 4) * 4)
+  }
+
+  const previewLines = (() => {
+    const text = uploadedText || '正文文字示例，这是排版的预览效果。文字大小' + fontSize + 'pt，行距' + lineHeight + '倍。内边距' + marginInner + 'mm（装订侧），外边距' + marginOuter + 'mm（翻页侧）。注意装订侧要留出足够空间以防装订后文字被遮挡。'
+    const paragraphs = text.split(/\n+/).filter(Boolean)
+    return paragraphs
+  })()
+
+  const selectedChapterZisu = zisuLibrary.find((z) => z.id === chapterZisu)
+  const selectedPageNumZisu = zisuLibrary.find((z) => z.id === pageNumZisu)
+
+  const textAlignClass = (() => {
+    switch (style) {
+      case 'center': return 'text-center'
+      case 'left': return 'text-left'
+      case 'justify': return 'text-justify'
+      default: return 'text-justify'
+    }
+  })()
+
+  const handleClearFile = () => {
+    setUploadedText('')
+    setUploadedFileName('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <Section title="内页排版助手" icon="📐" description="11种排版手法 × 4种预设，字数页数估算，出血线自动标注" />
+      <BackButton to="/book" label="返回书本制作" />
+      <Section title="内页排版助手" icon="📐" description="11种排版手法 × 4种预设，字数页数估算，出血线自动标注，支持上传文档实时预览" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 左侧：参数面板 */}
@@ -98,9 +150,19 @@ export default function LayoutAssistant() {
             </div>
           </div>
 
-          <Select label="正文字体" options={fonts.map((f) => ({ value: f.value, label: `${f.label} — ${f.desc}` }))} value={bodyFont} onChange={(e) => setBodyFont(e.target.value)} />
+          <Select
+            label="正文字体"
+            options={allFonts.map((f) => ({ value: f.id, label: `${f.name} — ${f.description}` }))}
+            value={bodyFont}
+            onChange={(e) => setBodyFont(e.target.value)}
+          />
 
-          <Select label="标题字体" options={fonts.map((f) => ({ value: f.value, label: `${f.label} — ${f.desc}` }))} value={titleFont} onChange={(e) => setTitleFont(e.target.value)} />
+          <Select
+            label="标题字体"
+            options={allFonts.map((f) => ({ value: f.id, label: `${f.name} — ${f.description}` }))}
+            value={titleFont}
+            onChange={(e) => setTitleFont(e.target.value)}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div className="mb-3">
@@ -124,11 +186,92 @@ export default function LayoutAssistant() {
             </div>
           </div>
 
+          {/* 字素装饰 */}
+          <div className="border-t border-border pt-4 mt-4">
+            <h3 className="font-semibold text-sm mb-3">字素装饰</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-text mb-1">章节标题装饰</label>
+                <select
+                  value={chapterZisu}
+                  onChange={(e) => setChapterZisu(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                >
+                  <option value="">无装饰</option>
+                  {zisuLibrary.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name} ({z.chars.split(' ').slice(0, 2).join(' ')})
+                    </option>
+                  ))}
+                </select>
+                {selectedChapterZisu && (
+                  <p className="text-[10px] text-text-muted mt-1">{selectedChapterZisu.usage}</p>
+                )}
+              </div>
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-text mb-1">页码装饰</label>
+                <select
+                  value={pageNumZisu}
+                  onChange={(e) => setPageNumZisu(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                >
+                  <option value="">无装饰</option>
+                  {zisuLibrary.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name} ({z.chars.split(' ').slice(0, 2).join(' ')})
+                    </option>
+                  ))}
+                </select>
+                {selectedPageNumZisu && (
+                  <p className="text-[10px] text-text-muted mt-1">{selectedPageNumZisu.usage}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 文档上传 */}
+          <div className="border-t border-border pt-4 mt-4">
+            <h3 className="font-semibold text-sm mb-3">文档上传</h3>
+            <div className="mb-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.docx"
+                onChange={handleFileUpload}
+                className="w-full text-sm text-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 file:cursor-pointer file:transition-colors"
+              />
+              <p className="text-[10px] text-text-muted mt-1">支持 .txt 和 .docx 格式</p>
+            </div>
+            {uploadedFileName && (
+              <div className="flex items-center justify-between p-2 bg-primary/5 rounded-lg">
+                <span className="text-xs text-text truncate flex-1">📄 {uploadedFileName}</span>
+                <button
+                  onClick={handleClearFile}
+                  className="text-xs text-danger hover:text-danger/80 ml-2 cursor-pointer flex-shrink-0"
+                  title="清除文件"
+                >
+                  ✕ 清除
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="border-t border-border pt-4 mt-4">
             <h3 className="font-semibold text-sm mb-3">字数页数估算</h3>
             <div className="mb-3">
               <label className="block text-sm font-medium text-text mb-1">总字数</label>
               <input type="number" value={wordCount} onChange={(e) => setWordCount(Number(e.target.value))} min={1000} max={500000} step={1000} className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm" />
+              {uploadedText && (
+                <p className="text-[10px] text-text-muted mt-1">
+                  文档实际字数：{uploadedText.replace(/\s/g, '').length} 字
+                  <button
+                    onClick={() => setWordCount(uploadedText.replace(/\s/g, '').length)}
+                    className="ml-2 text-primary hover:underline cursor-pointer"
+                  >
+                    填入
+                  </button>
+                </p>
+              )}
             </div>
             <Button variant="secondary" size="sm" onClick={calculatePages}>估算页数</Button>
             {estimatedPages > 0 && (
@@ -149,7 +292,7 @@ export default function LayoutAssistant() {
         <Card>
           <h3 className="font-semibold text-sm mb-4">页面预览</h3>
           <div className="flex items-center justify-center">
-            <div className="border-2 border-gray-400 bg-white shadow-lg relative" style={{ width: '200px', height: '280px' }}>
+            <div className="border-2 border-gray-400 bg-white shadow-lg relative" style={{ width: '220px', height: '320px' }}>
               {/* 出血线 */}
               <div className="absolute inset-0 border-2 border-dashed border-danger/50" style={{ margin: '3px' }}>
                 <span className="absolute -top-4 left-0 text-[9px] text-danger/70">出血线 3mm</span>
@@ -159,23 +302,49 @@ export default function LayoutAssistant() {
                 <span className="absolute -top-3 right-0 text-[9px] text-info/70">安全区</span>
               </div>
               {/* 页面内容 */}
-              <div className="absolute inset-0 flex" style={{ padding: `${marginOuter}px ${marginInner}px ${marginOuter}px ${marginInner}px` }}>
-                <div className="flex-1 flex flex-col" style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}>
+              <div
+                className="absolute inset-0 flex"
+                style={{ padding: `${marginOuter}px ${marginInner}px ${marginOuter}px ${marginInner}px` }}
+              >
+                <div
+                  className={`flex-1 flex flex-col ${textAlignClass}`}
+                  style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
+                >
                   {/* 标题 */}
-                  <div className="text-center font-bold mb-2" style={{ fontSize: `${fontSize * 1.5}px` }}>
-                    第一章
+                  <div
+                    className="text-center font-bold mb-2"
+                    style={{
+                      fontSize: `${fontSize * 1.5}px`,
+                      fontFamily: titleFontStyle.fontFamily,
+                      fontWeight: titleFontStyle.fontWeight,
+                    }}
+                  >
+                    {selectedChapterZisu && (
+                      <span className="mr-1">{selectedChapterZisu.chars.split(' ')[0]}</span>
+                    )}
+                    {uploadedFileName ? '第一章' : '第一章'}
+                    {selectedChapterZisu && (
+                      <span className="ml-1">{selectedChapterZisu.chars.split(' ')[0]}</span>
+                    )}
                   </div>
-                  {/* 正文示意 */}
-                  <div className="text-justify flex-1 overflow-hidden">
-                    <p className="mb-2" style={{ lineHeight: lineHeight }}>
-                      正文文字示例，这是排版的预览效果。文字大小{fontSize}pt，行距{lineHeight}倍。
-                    </p>
-                    <p className="mb-2" style={{ lineHeight: lineHeight }}>
-                      内边距{marginInner}mm（装订侧），外边距{marginOuter}mm（翻页侧）。注意装订侧要留出足够空间以防装订后文字被遮挡。
-                    </p>
+                  {/* 正文 */}
+                  <div
+                    ref={previewScrollRef}
+                    className="flex-1 overflow-hidden"
+                    style={{
+                      fontFamily: bodyFontStyle.fontFamily,
+                      fontWeight: bodyFontStyle.fontWeight,
+                      lineHeight: lineHeight,
+                    }}
+                  >
+                    {previewLines.map((para, i) => (
+                      <p key={i} className="mb-1" style={{ lineHeight: lineHeight }}>
+                        {para}
+                      </p>
+                    ))}
                     {/* 插图示意 */}
                     {preset !== 'text-only' && (
-                      <div className="w-full h-12 bg-gradient-to-r from-primary/20 to-accent/20 rounded flex items-center justify-center my-2">
+                      <div className="w-full h-10 bg-gradient-to-r from-primary/20 to-accent/20 rounded flex items-center justify-center my-2">
                         <span className="text-[8px] opacity-40">[插图/漫画区域]</span>
                       </div>
                     )}
@@ -187,7 +356,15 @@ export default function LayoutAssistant() {
                       </div>
                     )}
                     {/* 页码 */}
-                    <div className="text-center mt-auto pt-2 text-[8px] opacity-40">— 1 —</div>
+                    <div className="text-center mt-auto pt-2 text-[8px] opacity-40">
+                      {selectedPageNumZisu && (
+                        <span>{selectedPageNumZisu.chars.split(' ')[0]}</span>
+                      )}
+                      {selectedPageNumZisu ? ' 1 ' : '— 1 —'}
+                      {selectedPageNumZisu && (
+                        <span>{selectedPageNumZisu.chars.split(' ')[0]}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -199,6 +376,7 @@ export default function LayoutAssistant() {
               <Tag variant="default" size="sm">预设：{presets.find((p) => p.value === preset)?.label}</Tag>
               <Tag variant="primary" size="sm">排版：{layoutStyles.find((s) => s.value === style)?.label}</Tag>
               <Tag variant="success" size="sm">{fontSize}pt</Tag>
+              {uploadedFileName && <Tag variant="default" size="sm">📄 {uploadedFileName}</Tag>}
             </div>
           </div>
         </Card>

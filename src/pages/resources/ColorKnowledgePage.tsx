@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 import { colorTips, type ColorTip } from '@/data/colorKnowledge'
 
 const categories = [
@@ -18,6 +18,7 @@ export default function ColorKnowledgePage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="色差知识库" icon="🎨" description="从RGB到CMYK，从屏幕到纸张，全方位了解色彩管理" />
 
       <div className="flex flex-wrap gap-1 mb-6">

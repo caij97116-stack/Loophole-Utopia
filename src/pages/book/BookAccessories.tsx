@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface BookmarkType {
   id: string
@@ -80,6 +80,7 @@ export default function BookAccessories() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section title="书本配件设计器" icon="🔖" description="书签8种材质 × 外封6种材质 × 扉页5种 × 包装5种" />
 
       <div className="flex flex-wrap gap-1 mb-6">

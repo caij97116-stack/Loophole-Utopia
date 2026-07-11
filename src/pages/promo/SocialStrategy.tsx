@@ -1,4 +1,4 @@
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface PlatformStrategy {
   platform: string
@@ -88,6 +88,7 @@ const strategies: PlatformStrategy[] = [
 export default function SocialStrategy() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/promo" label="返回展会宣发" />
       <Section title="社交传播策略" icon="📱" description="各平台算法特点、最佳发布时间、话题标签、内容策略" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

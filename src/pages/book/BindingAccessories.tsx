@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface BindingAccessory {
   name: string
@@ -35,6 +35,7 @@ export default function BindingAccessories() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section title="装帧配件" icon="📦" description="腰封、书盒、包装袋、丝带书签等装帧配件大全" />
 
       <div className="flex gap-2 mb-4 flex-wrap">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 import { mistakes, type Mistake } from '@/data/mistakes'
 
 const categories = [
@@ -22,6 +22,7 @@ export default function MistakesPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="常见翻车案例" icon="🚨" description="前人踩过的坑，后人不要再踩。20个真实翻车案例+原因+预防方法" />
 
       <div className="flex flex-wrap gap-1 mb-6">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card } from '@/components/ui'
+import { BackButton, Section, Card } from '@/components/ui'
 
 const inquiryTemplates = [
   {
@@ -83,6 +83,7 @@ export default function InquiryHelper() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/factories" label="返回厂家报价" />
       <Section title="询价助手" icon="📋" description="一键生成标准化询价消息，复制发送给厂家" />
 
       <div className="flex flex-col lg:flex-row gap-6">

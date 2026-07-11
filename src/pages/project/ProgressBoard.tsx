@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface Task {
   id: string
@@ -56,6 +56,7 @@ export default function ProgressBoard() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/project" label="返回项目管理" />
       <Section title="进度看板" icon="📋" description="Kanban风格任务管理，拖拽进度一目了然" />
 
       {/* 进度条 */}

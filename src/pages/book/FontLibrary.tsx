@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface FontItem {
   name: string
@@ -52,6 +52,7 @@ export default function FontLibrary() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section title="字体与字素" icon="🔤" description="3000+可商用字体精选，含中日英文，附使用场景推荐" />
 
       <div className="flex gap-2 mb-4 flex-wrap">

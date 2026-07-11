@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card } from '@/components/ui'
+import { BackButton, Section, Card } from '@/components/ui'
 
 const templates = [
   { id: 'cover-reveal', name: '封面公开', platform: '微博/Lofter/Twitter' },
@@ -165,6 +165,7 @@ export default function PromoGenerator() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/promo" label="返回展会宣发" />
       <Section title="宣发模板生成器" icon="✍️" description="选择场景，填写变量，一键生成宣发文案" />
 
       <div className="flex flex-col lg:flex-row gap-6">

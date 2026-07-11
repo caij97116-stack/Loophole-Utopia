@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag, Select } from '@/components/ui'
+import { BackButton, Section, Card, Tag, Select } from '@/components/ui'
 import { bindings } from '@/data/bindings'
 import { papers } from '@/data/papers'
 
@@ -87,6 +87,7 @@ export default function ConflictDetector() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section title="智能冲突检测器" icon="🔍" description="装订 × 工艺 × 纸张 × 页数四维兼容性检测，防翻车利器" />
 
       <Card className="mb-6">

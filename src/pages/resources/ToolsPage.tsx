@@ -1,4 +1,4 @@
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface Tool {
   name: string
@@ -32,6 +32,7 @@ const categoryLabels: Record<string, string> = { '绘画': '绘画', '排版': '
 export default function ToolsPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="创作工具链" icon="🛠️" description="绘画/排版/设计软件对比，含免费替代方案" />
 
       {Object.entries(categoryLabels).map(([cat, label]) => {

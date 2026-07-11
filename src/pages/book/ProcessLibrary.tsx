@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 import { processes, type Process } from '@/data/processes'
 
 const categories = [
@@ -29,6 +29,7 @@ export default function ProcessLibrary() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/book" label="返回书本制作" />
       <Section title="中日融合工艺库" icon="✨" description={`${processes.length}+种封面/内页/周边工艺，中日双源，附适用场景与注意事项`} />
 
       <div className="flex flex-wrap items-center gap-3 mb-4">

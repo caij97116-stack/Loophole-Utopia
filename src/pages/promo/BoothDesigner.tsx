@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card } from '@/components/ui'
+import { BackButton, Section, Card } from '@/components/ui'
 import { boothTemplates } from '@/data/events'
 import type { BoothTemplate } from '@/data/events'
 
@@ -44,6 +44,7 @@ export default function BoothDesigner() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/promo" label="返回展会宣发" />
       <Section
         title="摊位设计器"
         icon="🏪"

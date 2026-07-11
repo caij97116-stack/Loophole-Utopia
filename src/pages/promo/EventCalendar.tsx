@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 import { events } from '@/data/events'
 import type { Event } from '@/data/events'
 
@@ -19,6 +19,7 @@ export default function EventCalendar() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/promo" label="返回展会宣发" />
       <Section
         title="展会日历"
         icon="📅"

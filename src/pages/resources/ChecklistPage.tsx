@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface CheckItem {
   id: string
@@ -42,6 +42,7 @@ export default function ChecklistPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="入稿前文件检查清单" icon="✅" description="16项入稿前必查项，逐项勾选确保不翻车" />
 
       <Card className="mb-6">

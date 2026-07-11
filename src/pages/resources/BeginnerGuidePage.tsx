@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Section, Card, Tag } from '@/components/ui'
+import { BackButton, Section, Card, Tag } from '@/components/ui'
 
 interface Step {
   id: string
@@ -123,6 +123,7 @@ export default function BeginnerGuidePage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <BackButton to="/resources" label="返回资源中心" />
       <Section title="新手入门全流程向导" icon="🚀" description="从企划到售卖，7步完成你的第一本同人志" />
 
       {/* 进度条 */}
