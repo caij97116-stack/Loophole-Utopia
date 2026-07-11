@@ -1,0 +1,330 @@
+export interface Event {
+  id: string
+  name: string
+  nameJa?: string
+  location: string
+  city: string
+  country: 'CN' | 'JP' | 'TW' | 'HK' | 'OTHER'
+  months: string[] // typical months
+  scale: 'small' | 'medium' | 'large' | 'mega'
+  type: 'comic' | 'doujin' | 'anime' | 'mixed'
+  description: string
+  boothFee: string // 摊位费
+  applyDeadline: string // 相对开展时间
+  notes: string
+}
+
+export const events: Event[] = [
+  {
+    id: 'comiket',
+    name: 'Comic Market (Comiket)',
+    nameJa: 'コミックマーケット',
+    location: '东京国际展示场 (Big Sight)',
+    city: '东京',
+    country: 'JP',
+    months: ['8月', '12月'],
+    scale: 'mega',
+    type: 'doujin',
+    description: '全球最大同人志即卖会，每届约3.5万个社团参展，2天约50万人次',
+    boothFee: '约8000-10000日元/日',
+    applyDeadline: '开展前3-4个月',
+    notes: '需通过抽选，中选率约50-60%。提供海外社团特别通道。需委托日本代理或亲自到场',
+  },
+  {
+    id: 'comicup',
+    name: 'COMICUP (CP)',
+    nameJa: '',
+    location: '国家会展中心（上海）',
+    city: '上海',
+    country: 'CN',
+    months: ['5月', '10月'],
+    scale: 'mega',
+    type: 'doujin',
+    description: '中国最大同人展，每届约4000+社团，单日约8-10万人次',
+    boothFee: '约200-400元/摊',
+    applyDeadline: '开展前1-2个月',
+    notes: '国内最主流同人展，申请通过率较高，建议提前准备作品展示',
+  },
+  {
+    id: 'cd',
+    name: '成都CD (Comiday)',
+    nameJa: '',
+    location: '成都世纪城新国际会展中心',
+    city: '成都',
+    country: 'CN',
+    months: ['不定期'],
+    scale: 'large',
+    type: 'doujin',
+    description: '西南地区最大同人展，历史悠久的同人盛会',
+    boothFee: '约150-300元/摊',
+    applyDeadline: '开展前1-2个月',
+    notes: '西南地区同人文化重镇，氛围浓厚',
+  },
+  {
+    id: 'ccg',
+    name: '中国国际动漫游戏博览会 (CCG)',
+    nameJa: '',
+    location: '上海世博展览馆',
+    city: '上海',
+    country: 'CN',
+    months: ['7月'],
+    scale: 'large',
+    type: 'mixed',
+    description: '综合性动漫游戏展，含同人、商业、游戏等板块',
+    boothFee: '约300-800元/摊',
+    applyDeadline: '开展前2-3个月',
+    notes: '商业展属性较强，同人区相对独立',
+  },
+  {
+    id: 'cwt',
+    name: 'CWT (Comic World Taiwan)',
+    nameJa: '',
+    location: '台湾大学综合体育馆 / 高雄市立社教馆',
+    city: '台北/台中/高雄',
+    country: 'TW',
+    months: ['2月', '3月', '8月', '12月'],
+    scale: 'large',
+    type: 'doujin',
+    description: '台湾最大同人展系列，每年在台北、台中、高雄举办多场',
+    boothFee: '约NT$600-800/摊',
+    applyDeadline: '开展前1-2个月',
+    notes: '台湾同人文化重镇，大陆社团可参加但需注意通关',
+  },
+  {
+    id: 'supercomic',
+    name: 'SUPER COMIC CITY',
+    nameJa: 'スーパーコミックシティ',
+    location: '东京国际展示场 (Big Sight)',
+    city: '东京',
+    country: 'JP',
+    months: ['1月', '3月', '5月', '11月'],
+    scale: 'large',
+    type: 'doujin',
+    description: '仅次于Comiket的大型同人展，以女性向为主',
+    boothFee: '约6000-8000日元/日',
+    applyDeadline: '开展前2-3个月',
+    notes: '女性向作品为主，BL/乙女向集中',
+  },
+  {
+    id: 'wf',
+    name: 'Wonder Festival (WF)',
+    nameJa: 'ワンダーフェスティバル',
+    location: '幕张展览馆',
+    city: '千叶',
+    country: 'JP',
+    months: ['2月', '7月'],
+    scale: 'large',
+    type: 'mixed',
+    description: '世界最大手办/模型/GK即卖会，也含同人志板块',
+    boothFee: '约8000-15000日元/摊',
+    applyDeadline: '开展前2-3个月',
+    notes: '以手办/GK为主，但也有同人志区，适合周边类社团',
+  },
+  {
+    id: 'bw',
+    name: 'BilibiliWorld (BW)',
+    nameJa: '',
+    location: '国家会展中心（上海）',
+    city: '上海',
+    country: 'CN',
+    months: ['7月'],
+    scale: 'mega',
+    type: 'mixed',
+    description: 'B站主办大型线下活动，含同人、UP主、游戏等板块',
+    boothFee: '约500-1500元/摊',
+    applyDeadline: '开展前2-3个月',
+    notes: '商业属性强，同人区近年扩大，流量大',
+  },
+  {
+    id: 'cpsp',
+    name: 'COMICUP SP',
+    nameJa: '',
+    location: '保利世贸博览馆',
+    city: '广州',
+    country: 'CN',
+    months: ['不定期'],
+    scale: 'large',
+    type: 'doujin',
+    description: 'CP广州特展，华南地区最大同人展',
+    boothFee: '约200-400元/摊',
+    applyDeadline: '开展前1-2个月',
+    notes: '华南地区重要的同人活动',
+  },
+  {
+    id: 'miku-only',
+    name: '初音未来ONLY / 角色ONLY展',
+    nameJa: 'オンリーイベント',
+    location: '各地（北京/上海/广州/成都等）',
+    city: '全国',
+    country: 'CN',
+    months: ['全年不定期'],
+    scale: 'small',
+    type: 'doujin',
+    description: '单一角色/作品主题的同人展，规模小但受众精准',
+    boothFee: '约100-250元/摊',
+    applyDeadline: '开展前1-2个月',
+    notes: '受众精准，转化率高，适合特定IP的社团',
+  },
+]
+
+export interface BoothTemplate {
+  id: string
+  name: string
+  width: number // 桌面宽度cm
+  depth: number // 桌面深度cm
+  description: string
+  layout: { type: 'stand' | 'display' | 'book' | 'goods' | 'poster' }[]
+  tips: string[]
+}
+
+export const boothTemplates: BoothTemplate[] = [
+  {
+    id: 'standard-half',
+    name: '半摊标准',
+    width: 90,
+    depth: 60,
+    description: '最常见的半摊配置，适合单人运营',
+    layout: [
+      { type: 'stand', },
+      { type: 'book', },
+      { type: 'goods', },
+    ],
+    tips: [
+      '新刊放最前排显眼位置',
+      '吧唧架放在右侧（右手拿取方便）',
+      '样品展示用立牌立在后方',
+      '找零盒放在左侧顺手位置',
+    ],
+  },
+  {
+    id: 'standard-full',
+    name: '全摊标准',
+    width: 180,
+    depth: 60,
+    description: '全摊配置，适合双人或多人运营',
+    layout: [
+      { type: 'stand', },
+      { type: 'stand', },
+      { type: 'book', },
+      { type: 'goods', },
+      { type: 'display', },
+    ],
+    tips: [
+      '左右分区：左边新刊+本子，右边周边+展示',
+      '中间放样品展示，吸引眼球',
+      '两人配合：一人介绍一人收银',
+      '后方可挂海报/挂轴',
+    ],
+  },
+  {
+    id: 'corner',
+    name: '角落摊/壁摊',
+    width: 180,
+    depth: 90,
+    description: '靠墙/角落位置，可利用后方墙壁',
+    layout: [
+      { type: 'stand', },
+      { type: 'book', },
+      { type: 'goods', },
+      { type: 'poster', },
+      { type: 'display', },
+    ],
+    tips: [
+      '后方墙壁挂大幅海报，远距离吸引人流',
+      '利用墙角空间做展示架',
+      '角落位置人流可能较少，需要更醒目的展示',
+      '可放立式展示架引导人流',
+    ],
+  },
+]
+
+export const promoMaterials = [
+  {
+    id: 'sample-pages',
+    name: '试阅/Sample',
+    description: '发布前放出几页试阅内容，吸引潜在读者',
+    platforms: ['微博', 'Lofter', 'Pixiv', 'Twitter'],
+    bestTime: '开展前2-4周',
+    tips: [
+      '选最有吸引力的2-3页',
+      '不要放太多，保持神秘感',
+      '加上「全本XX页」的字样',
+      '附上摊位号和展会信息',
+    ],
+  },
+  {
+    id: 'cover-reveal',
+    name: '封面公开',
+    description: '公开本子封面，建立期待感',
+    platforms: ['微博', 'Lofter', 'Twitter', '小红书'],
+    bestTime: '开展前1-2周',
+    tips: [
+      '高质量的封面是第一印象',
+      '可以同时公开标题和页数',
+      '加上预购/通贩链接',
+      '利用封面做头像/横幅联动',
+    ],
+  },
+  {
+    id: 'goods-preview',
+    name: '周边预览',
+    description: '展示周边实物图或设计图，吸引周边爱好者',
+    platforms: ['微博', '小红书', 'Twitter'],
+    bestTime: '开展前1-2周',
+    tips: [
+      '实物图比设计图更有说服力',
+      '标注材质和尺寸',
+      '可以预告限量数量制造紧迫感',
+      '多角度展示（吧唧的正反面等）',
+    ],
+  },
+  {
+    id: 'event-map',
+    name: '摊位地图/导航',
+    description: '发布摊位位置图，方便粉丝找到你',
+    platforms: ['微博', 'Lofter', 'Twitter'],
+    bestTime: '开展前1-3天',
+    tips: [
+      '标注摊位号、区域位置',
+      '用箭头/图示标注路线',
+      '附上周边摊位参考（如厕所、出口）',
+      '加上你的社团logo/标志方便识别',
+    ],
+  },
+  {
+    id: 'event-live',
+    name: '展会实况',
+    description: '展会当天实时更新，引导现场粉丝',
+    platforms: ['微博', 'Twitter'],
+    bestTime: '展会当天',
+    tips: [
+      '早上发布摊位准备完毕的照片',
+      '实时更新库存情况（还剩多少本）',
+      '结束前发「最后X本」制造紧迫感',
+      '可以开直播增加互动',
+    ],
+  },
+  {
+    id: 'post-event',
+    name: '展后总结/通贩',
+    description: '展会结束后感谢粉丝，并开放通贩渠道',
+    platforms: ['微博', 'Lofter', 'Twitter'],
+    bestTime: '展后1-3天',
+    tips: [
+      '感谢到场支持的粉丝',
+      '公布通贩链接和时间',
+      '展示摊位照片增加亲切感',
+      '预告下次参展计划',
+    ],
+  },
+]
+
+export const checklistItems = [
+  { phase: '3个月前', items: ['确认参展展会', '提交摊位申请', '确定作品主题和内容', '开始创作/约稿', '预估印量'] },
+  { phase: '2个月前', items: ['完成初稿', '联系印刷厂询价', '确定装订和纸张方案', '开始周边设计', '确认封面设计'] },
+  { phase: '1个月前', items: ['定稿入稿', '周边下单生产', '准备宣发素材', '设计摊位布置方案', '准备找零/包装材料'] },
+  { phase: '2周前', items: ['收到印刷品/周边', '检查质量', '发布封面/试阅宣发', '准备价目表/菜单', '确定摊位号'] },
+  { phase: '1周前', items: ['发布摊位地图', '最后宣发冲刺', '准备摊位道具（桌布/立牌/展示架）', '确认交通和住宿', '准备当日所需物品清单'] },
+  { phase: '展会当天', items: ['早起，提前到场布置', '陈列商品，测试收银', '保持良好状态接待粉丝', '记录销售数据', '结束后清理摊位'] },
+  { phase: '展后', items: ['整理销售数据', '发布展后感谢', '开放通贩', '复盘总结经验', '规划下次参展'] },
+]
