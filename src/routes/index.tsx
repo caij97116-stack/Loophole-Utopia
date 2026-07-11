@@ -99,5 +99,5 @@ export const router = createBrowserRouter([
     ],
   },
 ], {
-  basename: '/loophole-utopia',
+  basename: '/Loophole-Utopia',
 })
