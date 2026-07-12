@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>GLB Model Generator</title></head><body>
+<h1>Generating GLB models...</h1>
+<pre id="log"></pre>
+<script type="importmap">
+{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+
+const log = document.getElementById('log')
+function l(msg) { log.textContent += msg + '\n'; console.log(msg) }
+
+function exportGLB(scene, name) {
+  return new Promise((resolve, reject) => {
+    const exporter = new GLTFExporter()
+    exporter.parse(scene, (glb) => {
+      const blob = new Blob([glb], { type: 'model/gltf-binary' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = name + '.glb'; a.click()
+      URL.revokeObjectURL(url)
+      l('✅ ' + name + ' (' + (glb.byteLength / 1024).toFixed(1) + ' KB)')
+      resolve()
+    }, (err) => { l('❌ ' + name + ': ' + err); reject(err) }, { binary: true })
+  })
+}
+
+// 1. Book
+async function genBook() {
+  const scene = new THREE.Scene()
+  const scale = 0.018
+  const bookW = 148, bookH = 210, spineW = 8
+  const hw = bookW * scale / 2, hh = bookH * scale / 2, sw = spineW * scale / 2
+  const ct = 0.06, pd = 0.12, overhang = 0.05
+  const coverW = bookW * scale + overhang, coverH = bookH * scale + overhang
+
+  const frontMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.02, color: '#2c3e80' })
+  const backMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.02, color: '#1a2744' })
+  const spineMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.05, color: '#1e2d50' })
+  const paperMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, color: '#fef3c7' })
+  const edgeMat = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0, color: '#f5f5f0' })
+
+  const group = new THREE.Group()
+  // Back cover
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(coverW, coverH, ct), backMat)).position.set(-sw - hw, 0, 0)
+  // Pages
+  const pageW = bookW * scale - 0.04, pageH = bookH * scale - 0.08
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(pageW, pageH, pd), paperMat)).position.set(-sw, 0, ct / 2 + pd / 2)
+  // Side edges
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(0.01, pageH, pd), edgeMat)).position.set(hw - sw - 0.02, 0, ct / 2 + pd / 2)
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(pageW, 0.01, pd), edgeMat)).position.set(-sw, hh - 0.04, ct / 2 + pd / 2)
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(pageW, 0.01, pd), edgeMat)).position.set(-sw, -hh + 0.04, ct / 2 + pd / 2)
+  // Right pages
+  const rpg = new THREE.Group(); rpg.position.set(sw + 0.01, 0, ct / 2 + pd / 2)
+  rpg.add(new THREE.Mesh(new THREE.BoxGeometry(pageW, pageH, pd), paperMat))
+  rpg.add(new THREE.Mesh(new THREE.BoxGeometry(0.01, pageH, pd), edgeMat)).position.set(hw - 0.02, 0, 0)
+  group.add(rpg)
+  // Front cover
+  const fg = new THREE.Group(); fg.position.set(sw + hw, 0, 0)
+  fg.add(new THREE.Mesh(new THREE.BoxGeometry(coverW, coverH, ct), frontMat))
+  group.add(fg)
+  // Spine
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(sw * 2, coverH, ct + pd), spineMat)).position.set(0, 0, pd / 2)
+  // Ribbon
+  const ribbonMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0, color: '#e74c3c' })
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.5, 0.003), ribbonMat)).position.set(0, -hh + 0.35, ct / 2 + pd + 0.005)
+  group.add(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.25, 0.003), ribbonMat)).position.set(0, -hh - 0.05, ct / 2 + pd + 0.005)
+  scene.add(group)
+  await exportGLB(scene, 'book')
+}
+
+// 2. Badge
+async function genBadge() {
+  const scene = new THREE.Scene()
+  const s = 1.2
+  const designMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.4, color: '#f8c8dc' })
+  const metalMat = new THREE.MeshStandardMaterial({ roughness: 0.12, metalness: 0.95, color: '#d4d4d4' })
+  const group = new THREE.Group()
+  group.add(new THREE.Mesh(new THREE.CylinderGeometry(s * 1.06, s * 1.06, 0.07, 64), metalMat)).position.y = -0.04
+  group.add(new THREE.Mesh(new THREE.CylinderGeometry(s * 0.98, s, 0.06, 64), designMat)).position.y = 0.025
+  group.add(new THREE.Mesh(new THREE.TorusGeometry(s * 1.03, 0.025, 16, 64), metalMat)).rotation.x = Math.PI / 2; group.children[group.children.length - 1].position.y = 0.055
+  // Pin back
+  const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8), new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.8, color: '#888' }))
+  pin.rotation.x = Math.PI / 2; pin.position.set(0, -0.1, -0.2); group.add(pin)
+  scene.add(group)
+  await exportGLB(scene, 'badge')
+}
+
+// 3. Acrylic
+async function genAcrylic() {
+  const scene = new THREE.Scene()
+  const group = new THREE.Group()
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.02, metalness: 0.02, color: '#ffffff', transparent: true, opacity: 0.85 })
+  group.add(new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.28, 64), mat))
+  scene.add(group)
+  await exportGLB(scene, 'acrylic')
+}
+
+// 4. Sticker
+async function genSticker() {
+  const scene = new THREE.Scene()
+  const group = new THREE.Group()
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0, color: '#8ecae6' })
+  group.add(new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.03, 64), mat))
+  scene.add(group)
+  await exportGLB(scene, 'sticker')
+}
+
+// 5. Rubber
+async function genRubber() {
+  const scene = new THREE.Scene()
+  const group = new THREE.Group()
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.65, metalness: 0, color: '#a0a0a0' })
+  group.add(new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.2, 64), mat))
+  // Hole
+  const hole = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.03, 8, 16), new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0, color: '#d4cfc8' }))
+  hole.position.set(0, -0.03, 0.85); hole.rotation.x = Math.PI / 2; group.add(hole)
+  scene.add(group)
+  await exportGLB(scene, 'rubber')
+}
+
+async function main() {
+  l('Starting GLB generation...')
+  await genBook()
+  await genBadge()
+  await genAcrylic()
+  await genSticker()
+  await genRubber()
+  l('All done! Files should be downloading...')
+}
+main()
+</script>
+</body></html>
