@@ -646,6 +646,10 @@ export default function GoodsRenderer() {
   const [glbModel, setGlbModel] = useState<string | null>(null)
   const [glbName, setGlbName] = useState('')
 
+  // 默认 GLB 模型（根据产品类型）
+  const defaultGlb = import.meta.env.BASE_URL + 'models/' + goodsType + '.glb'
+  const effectiveGlb = glbModel || defaultGlb
+
   const config = goodsConfigs.find((g) => g.type === goodsType)!
   const activeShape = config.shapes.find((s) => s.id === shape)!
   const activeSize = config.sizes.find((s) => s.id === size)!
@@ -656,7 +660,7 @@ export default function GoodsRenderer() {
     size: activeSize.scale,
     roughness: activeEffect.roughness,
     metalness: activeEffect.metalness,
-    baseColor, imageDataUrl: uploadedImage, bgColor, glbModel,
+    baseColor, imageDataUrl: uploadedImage, bgColor, glbModel: effectiveGlb,
   })
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

@@ -507,6 +507,10 @@ export default function Book3DPreview() {
   const [glbModel, setGlbModel] = useState<string | null>(null)
   const [glbName, setGlbName] = useState('')
 
+  // 默认 GLB 模型路径
+  const defaultGlb = import.meta.env.BASE_URL + 'models/book.glb'
+  const effectiveGlb = glbModel || defaultGlb
+
   const preset = formatPresets.find((f) => f.id === format)!
   const bookW = format === 'custom' ? customW : preset.w
   const bookH = format === 'custom' ? customH : preset.h
@@ -515,7 +519,7 @@ export default function Book3DPreview() {
 
   useBookScene(containerRef, {
     bookW, bookH, spineW: actualSpine, coverImage, spineRatio, spineText,
-    paperColor, edgeColor: activeEdgeColor, bgColor, isOpen, glbModel,
+    paperColor, edgeColor: activeEdgeColor, bgColor, isOpen, glbModel: effectiveGlb,
   })
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
