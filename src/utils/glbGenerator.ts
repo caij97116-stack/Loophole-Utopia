@@ -389,46 +389,134 @@ export async function generateRubberGLB(options: RubberOptions): Promise<ArrayBu
 }
 
 // ============================================================
-// 书本 Book
+// 书本 Book - 重写：圆脊 + 飘口 + 封面拆分 + 书脊文字
 // ============================================================
 export interface BookOptions {
-  width: number     // 毫米
-  height: number    // 毫米
-  spineWidth: number // 毫米
-  coverImageDataUrl?: string
+  width: number       // 毫米
+  height: number      // 毫米
+  spineWidth: number  // 毫米
+  coverImageDataUrl?: string  // 横排：封底|书脊|封面
+  spineRatio: number // 书脊占封面图比例 (0.02 ~ 0.2)
+  spineText?: string  // 书脊文字
   paperColor: string
   edgeColor: string
-  openAngle: number  // 0 = 闭合, 0.55PI = 翻开
+  openAngle: number   // 0 = 闭合, 0.55PI = 翻开
+}
+
+// Canvas 封面图片拆分为 封底/书脊/封面 三张纹理
+async function splitCoverTexture(
+  dataUrl: string,
+  spineRatio: number,
+): Promise<{ front: THREE.CanvasTexture; back: THREE.CanvasTexture; spine: THREE.CanvasTexture } | null> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = reject
+      i.src = dataUrl
+    })
+
+    const cw = img.width
+    const ch = img.height
+    const spineW = Math.round(cw * spineRatio)
+    const coverW = Math.round((cw - spineW) / 2)
+
+    const canvas = document.createElement('canvas')
+
+    function crop(sx: number, sw: number): THREE.CanvasTexture {
+      canvas.width = Math.max(sw, 1)
+      canvas.height = Math.max(ch, 1)
+      const ctx = canvas.getContext('2d')!
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, sx, 0, sw, ch, 0, 0, canvas.width, canvas.height)
+      const tex = new THREE.CanvasTexture(canvas)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.wrapS = THREE.ClampToEdgeWrapping
+      tex.wrapT = THREE.ClampToEdgeWrapping
+      tex.needsUpdate = true
+      return tex
+    }
+
+    return {
+      back: crop(0, coverW),           // 封底：最左边
+      spine: crop(coverW, spineW),     // 书脊：中间
+      front: crop(coverW + spineW, coverW), // 封面：最右边
+    }
+  } catch {
+    return null
+  }
+}
+
+// Canvas 渲染书脊文字
+function createSpineTextTexture(
+  text: string,
+  _spineWidth: number,
+  height: number,
+): THREE.CanvasTexture | null {
+  if (!text) return null
+  const scale = 4
+  const w = 64
+  const h = Math.round(height * scale * 0.018)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')!
+
+  ctx.fillStyle = 'transparent'
+  ctx.fillRect(0, 0, w, h)
+
+  // 竖排文字
+  const chars = text.split('')
+  const fontSize = Math.min(18, Math.floor(w / chars.length * 1.5))
+  ctx.font = `bold ${fontSize}px sans-serif`
+  ctx.fillStyle = '#ffffff'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  const startY = h / 2 - ((chars.length - 1) * fontSize * 1.3) / 2
+  chars.forEach((char, i) => {
+    ctx.fillText(char, w / 2, startY + i * fontSize * 1.3)
+  })
+
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.needsUpdate = true
+  return tex
 }
 
 export async function generateBookGLB(options: BookOptions): Promise<ArrayBuffer> {
-  const { width, height, spineWidth, coverImageDataUrl, paperColor, edgeColor, openAngle } = options
+  const { width, height, spineWidth, coverImageDataUrl, spineRatio, spineText, paperColor, edgeColor, openAngle } = options
 
   const scale = 0.018
   const hw = width * scale / 2
   const hh = height * scale / 2
   const sw = spineWidth * scale / 2
-  const ct = 0.08
-  const pageDepth = 0.15
+  const ct = 0.08  // 封面厚度
+  const pageDepth = 0.15  // 书页总厚度
+  const overhang = 0.04  // 飘口（封面比书页多出的部分）
 
   const group = new THREE.Group()
 
-  // 封面纹理
-  let coverTex: THREE.Texture | null = null
+  // ---- 封面纹理拆分 ----
+  let coverTextures: { front: THREE.CanvasTexture; back: THREE.CanvasTexture; spine: THREE.CanvasTexture } | null = null
   if (coverImageDataUrl) {
-    try { coverTex = await loadTexture(coverImageDataUrl) } catch { /* ignore */ }
+    coverTextures = await splitCoverTexture(coverImageDataUrl, spineRatio)
   }
 
-  const frontMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.03 })
-  const spineMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.03 })
-  const backMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.03 })
+  // ---- 书脊文字纹理 ----
+  const spineTextTex = spineText ? createSpineTextTexture(spineText, spineWidth, height) : null
 
-  if (coverTex) {
-    frontMat.map = coverTex
+  // ---- 材质 ----
+  const frontMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.03 })
+  const backMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.03 })
+  const spineMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.03 })
+
+  if (coverTextures) {
+    frontMat.map = coverTextures.front
     frontMat.color.set('#ffffff')
-    backMat.map = coverTex
+    backMat.map = coverTextures.back
     backMat.color.set('#ffffff')
-    spineMat.map = coverTex
+    spineMat.map = coverTextures.spine
     spineMat.color.set('#ffffff')
   } else {
     frontMat.color.set('#1e40af')
@@ -443,92 +531,115 @@ export async function generateBookGLB(options: BookOptions): Promise<ArrayBuffer
     roughness: 0.4, metalness: edgeColor === '#ffd700' ? 0.5 : 0, color: new THREE.Color(edgeColor),
   })
 
-  // 书脊
-  const spine = new THREE.Mesh(
-    new THREE.BoxGeometry(spineWidth * scale, height * scale, ct + 0.01),
-    spineMat,
-  )
+  // ---- 圆脊（弧形书脊） ----
+  // 使用 ExtrudeGeometry 创建弧形书脊截面
+  const spineShape = new THREE.Shape()
+  const spineR = sw * 1.5 // 书脊弧半径
+  spineShape.moveTo(-sw, -ct / 2)
+  // 弧线向外凸出
+  spineShape.quadraticCurveTo(-sw + spineR * 0.3, -ct / 2 - spineR * 0.15, 0, -ct / 2 - sw * 0.3)
+  spineShape.quadraticCurveTo(sw - spineR * 0.3, -ct / 2 - spineR * 0.15, sw, -ct / 2)
+  spineShape.lineTo(sw, ct / 2)
+  spineShape.quadraticCurveTo(sw - spineR * 0.3, ct / 2 + spineR * 0.15, 0, ct / 2 + sw * 0.3)
+  spineShape.quadraticCurveTo(-sw + spineR * 0.3, ct / 2 + spineR * 0.15, -sw, ct / 2)
+  spineShape.closePath()
+
+  const spineGeom = new THREE.ExtrudeGeometry(spineShape, {
+    steps: 1,
+    depth: height * scale,
+    bevelEnabled: false,
+  })
+  const spine = new THREE.Mesh(spineGeom, spineMat)
+  spine.position.z = -height * scale / 2
   group.add(spine)
 
-  // 封底（左边）
+  // 书脊文字叠加层（贴在弧形书脊表面）
+  if (spineTextTex) {
+    const spineLabelGeom = new THREE.PlaneGeometry(sw * 1.6, height * scale * 0.8)
+    const spineLabelMat = new THREE.MeshBasicMaterial({
+      map: spineTextTex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    })
+    const spineLabel = new THREE.Mesh(spineLabelGeom, spineLabelMat)
+    spineLabel.position.z = -sw * 0.35
+    spineLabel.renderOrder = 1
+    group.add(spineLabel)
+  }
+
+  // ---- 封底（左边） ----
+  // 封面比书页大一圈（飘口）
+  const coverW = width * scale + overhang
+  const coverH = height * scale + overhang
   const back = new THREE.Mesh(
-    new THREE.BoxGeometry(width * scale, height * scale, ct),
+    new THREE.BoxGeometry(coverW, coverH, ct),
     backMat,
   )
-  back.position.x = -sw - hw
+  back.position.set(-sw - hw, 0, 0)
   group.add(back)
 
-  // 左页块
+  // ---- 左页块 ----
+  const pageW = width * scale - 0.06
+  const pageH = height * scale - 0.1
   const leftPages = new THREE.Mesh(
-    new THREE.BoxGeometry(width * scale - 0.06, height * scale - 0.1, pageDepth),
+    new THREE.BoxGeometry(pageW, pageH, pageDepth),
     paperMat,
   )
   leftPages.position.set(-sw, 0, ct / 2 + pageDepth / 2)
   group.add(leftPages)
 
-  // 书口侧面
+  // 书口侧面（左页块右侧可见）
   const edgeSide = new THREE.Mesh(
-    new THREE.BoxGeometry(0.015, height * scale - 0.1, pageDepth),
+    new THREE.BoxGeometry(0.015, pageH, pageDepth),
     edgeMat,
   )
   edgeSide.position.set(hw - sw - 0.03, 0, ct / 2 + pageDepth / 2)
   group.add(edgeSide)
 
-  // 书口上下
-  const edgeTop = new THREE.Mesh(
-    new THREE.BoxGeometry(width * scale - 0.06, 0.015, pageDepth),
-    edgeMat,
-  )
+  // 书口上下（天头地脚）
+  const edgeGeom = new THREE.BoxGeometry(pageW, 0.015, pageDepth)
+  const edgeTop = new THREE.Mesh(edgeGeom.clone(), edgeMat)
   edgeTop.position.set(-sw, hh - 0.05, ct / 2 + pageDepth / 2)
   group.add(edgeTop)
-
-  const edgeBottom = new THREE.Mesh(
-    new THREE.BoxGeometry(width * scale - 0.06, 0.015, pageDepth),
-    edgeMat,
-  )
+  const edgeBottom = new THREE.Mesh(edgeGeom.clone(), edgeMat)
   edgeBottom.position.set(-sw, -hh + 0.05, ct / 2 + pageDepth / 2)
   group.add(edgeBottom)
 
-  // 右页块（翻开角度）
+  // ---- 右页块（翻开角度） ----
   const rightPagesGroup = new THREE.Group()
   rightPagesGroup.position.set(sw + 0.01, 0, ct / 2 + pageDepth / 2)
   rightPagesGroup.rotation.y = openAngle * 0.9
   const rightPages = new THREE.Mesh(
-    new THREE.BoxGeometry(width * scale - 0.06, height * scale - 0.1, pageDepth),
+    new THREE.BoxGeometry(pageW, pageH, pageDepth),
     paperMat,
   )
   rightPagesGroup.add(rightPages)
   const rightEdge = new THREE.Mesh(
-    new THREE.BoxGeometry(0.015, height * scale - 0.1, pageDepth),
+    new THREE.BoxGeometry(0.015, pageH, pageDepth),
     edgeMat,
   )
   rightEdge.position.set(hw - 0.03, 0, 0)
   rightPagesGroup.add(rightEdge)
   group.add(rightPagesGroup)
 
-  // 封面（翻开）
+  // ---- 封面（翻开） ----
   const frontGroup = new THREE.Group()
   frontGroup.position.set(sw + hw, 0, 0)
   frontGroup.rotation.y = openAngle
   const front = new THREE.Mesh(
-    new THREE.BoxGeometry(width * scale, height * scale, ct),
+    new THREE.BoxGeometry(coverW, coverH, ct),
     frontMat,
   )
   frontGroup.add(front)
   group.add(frontGroup)
 
-  // 书签带
-  const ribbon = new THREE.Mesh(
-    new THREE.BoxGeometry(0.03, 0.6, 0.005),
-    new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, color: '#e74c3c' }),
-  )
+  // ---- 书签带 ----
+  const ribbonMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, color: '#e74c3c' })
+  const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.6, 0.005), ribbonMat)
   ribbon.position.set(0, -hh + 0.5, ct / 2 + pageDepth + 0.01)
   group.add(ribbon)
-
-  const ribbonTail = new THREE.Mesh(
-    new THREE.BoxGeometry(0.03, 0.3, 0.005),
-    new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, color: '#e74c3c' }),
-  )
+  const ribbonTail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.3, 0.005), ribbonMat)
   ribbonTail.position.set(0, -hh, ct / 2 + pageDepth + 0.01)
   group.add(ribbonTail)
 

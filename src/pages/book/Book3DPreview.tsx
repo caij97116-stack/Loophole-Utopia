@@ -32,6 +32,7 @@ export default function Book3DPreview() {
   const [customH, setCustomH] = useState(210)
   const [spineWidth, setSpineWidth] = useState(8)
   const [spineRatio, setSpineRatio] = useState(0.06)
+  const [spineText, setSpineText] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [paperColor, setPaperColor] = useState('#fef3c7')
   const [edgeColor, setEdgeColor] = useState('cream')
@@ -72,6 +73,8 @@ export default function Book3DPreview() {
           height: bookHeight,
           spineWidth: actualSpine,
           coverImageDataUrl: coverImage ?? undefined,
+          spineRatio,
+          spineText: spineText || undefined,
           paperColor,
           edgeColor: activeEdgeColor,
           openAngle: isOpen ? Math.PI * 0.55 : 0,
@@ -87,7 +90,7 @@ export default function Book3DPreview() {
 
     generate()
     return () => { cancelled = true }
-  }, [bookWidth, bookHeight, actualSpine, coverImage, paperColor, activeEdgeColor, isOpen])
+  }, [bookWidth, bookHeight, actualSpine, coverImage, spineRatio, spineText, paperColor, activeEdgeColor, isOpen])
 
   const handleDownload = useCallback(() => {
     const viewer = document.querySelector('model-viewer')
@@ -218,6 +221,19 @@ export default function Book3DPreview() {
               className="w-full mt-1"
             />
             <p className="text-xs text-text-muted mt-1">封底 | 书脊 | 封面</p>
+          </Card>
+
+          {/* 书脊文字 */}
+          <Card>
+            <h3 className="font-semibold text-sm mb-3">书脊文字</h3>
+            <input
+              type="text"
+              value={spineText}
+              onChange={(e) => setSpineText(e.target.value)}
+              placeholder="输入书脊文字（竖排）"
+              className="w-full px-2 py-1.5 rounded border border-border bg-bg text-xs"
+            />
+            <p className="text-xs text-text-muted mt-1">留空则不显示书脊文字</p>
           </Card>
 
           {/* 控制 */}
