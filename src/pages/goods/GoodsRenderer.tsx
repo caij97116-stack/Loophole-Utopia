@@ -8,6 +8,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { BackButton, Card, Section, Tag } from '@/components/ui'
 
 // ============================================================
@@ -268,7 +269,7 @@ interface GoodsSceneOpts {
   shape: string; diecutShape: DiecutShape
   size: number; roughness: number; metalness: number
   baseColor: string; imageDataUrl: string | null
-  bgColor: string
+  bgColor: string; glbModel: string | null
 }
 
 function useGoodsScene(
@@ -574,6 +575,56 @@ function useGoodsScene(
     build()
   }, [opts.goodsType, opts.shape, opts.diecutShape, opts.size, opts.roughness, opts.metalness, opts.baseColor, opts.imageDataUrl, opts.bgColor])
 
+  // GLB 模型加载
+  useEffect(() => {
+    const state = sceneRef.current
+    if (!state || !opts.glbModel) return
+
+    const loader = new GLTFLoader()
+    loader.load(opts.glbModel, (gltf) => {
+      if (state.disposed) return
+      state.modelGroup.clear()
+
+      const model = gltf.scene
+      const box = new THREE.Box3().setFromObject(model)
+      const size = box.getSize(new THREE.Vector3())
+      const maxDim = Math.max(size.x, size.y, size.z)
+      const targetSize = 2.0
+      const s = targetSize / maxDim
+      model.scale.setScalar(s)
+      model.position.set(0, 0, 0)
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      })
+      state.modelGroup.add(model)
+
+      if (opts.imageDataUrl) {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          const tex = new THREE.CanvasTexture(img)
+          tex.colorSpace = THREE.SRGBColorSpace
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material]
+              mats.forEach((m) => {
+                if (m instanceof THREE.MeshStandardMaterial || m instanceof THREE.MeshPhysicalMaterial) {
+                  m.map = tex; m.needsUpdate = true
+                }
+              })
+            }
+          })
+        }
+        img.src = opts.imageDataUrl
+      }
+    }, undefined, () => {
+      console.warn('GLB 模型加载失败，使用程序化模型')
+    })
+  }, [opts.glbModel])
+
   return sceneRef
 }
 
@@ -592,6 +643,8 @@ export default function GoodsRenderer() {
   const [fileName, setFileName] = useState('')
   const [bgColor, setBgColor] = useState('#e8e8e8')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [glbModel, setGlbModel] = useState<string | null>(null)
+  const [glbName, setGlbName] = useState('')
 
   const config = goodsConfigs.find((g) => g.type === goodsType)!
   const activeShape = config.shapes.find((s) => s.id === shape)!
@@ -603,7 +656,7 @@ export default function GoodsRenderer() {
     size: activeSize.scale,
     roughness: activeEffect.roughness,
     metalness: activeEffect.metalness,
-    baseColor, imageDataUrl: uploadedImage, bgColor,
+    baseColor, imageDataUrl: uploadedImage, bgColor, glbModel,
   })
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -618,6 +671,18 @@ export default function GoodsRenderer() {
   const handleClearImage = useCallback(() => {
     setUploadedImage(null); setFileName('')
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
+
+  const handleGlbUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.name.endsWith('.glb')) return
+    setGlbName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const blob = new Blob([reader.result as ArrayBuffer], { type: 'model/gltf-binary' })
+      setGlbModel(URL.createObjectURL(blob))
+    }
+    reader.readAsArrayBuffer(file)
   }, [])
 
   const handleTypeChange = useCallback((type: GoodsType) => {
@@ -730,6 +795,39 @@ export default function GoodsRenderer() {
               </button>
             )}
             <p className="text-xs text-text-muted mt-2">推荐透明底PNG</p>
+          </Card>
+          <Card>
+            <h3 className="text-sm font-semibold mb-3">3D 模型（GLB）</h3>
+            <p className="text-xs text-text-muted mb-2">
+              上传 GLB 替换程序化模型。<br />
+              <a href="https://meshy.ai" target="_blank" rel="noopener noreferrer"
+                className="text-primary underline">用 Meshy.ai 免费生成</a>
+            </p>
+            <label className="block w-full cursor-pointer">
+              <div className={`border-2 border-dashed rounded-xl p-3 text-center transition-colors ${
+                glbModel ? 'border-primary' : 'border-border hover:border-primary'
+              }`}>
+                {glbModel ? (
+                  <div className="space-y-1">
+                    <span className="text-sm block">📦</span>
+                    <p className="text-xs text-text-muted truncate">{glbName}</p>
+                    <span className="text-xs text-primary">点击更换</span>
+                  </div>
+                ) : (
+                  <div className="space-y-1 py-1">
+                    <span className="text-sm block">📦</span>
+                    <p className="text-xs text-text-muted">加载 GLB 模型</p>
+                  </div>
+                )}
+              </div>
+              <input type="file" accept=".glb" onChange={handleGlbUpload} className="hidden" />
+            </label>
+            {glbModel && (
+              <button onClick={() => { setGlbModel(null); setGlbName('') }}
+                className="mt-2 w-full text-xs text-red-500 hover:underline cursor-pointer">
+                清除模型
+              </button>
+            )}
           </Card>
           <div className="text-xs text-text-muted p-2">
             <p className="text-primary">拖拽旋转 · 滚轮缩放 · 右键平移</p>
