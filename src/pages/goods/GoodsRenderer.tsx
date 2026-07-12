@@ -105,30 +105,50 @@ function getDiecutShape(shape: string, r: number): THREE.Shape {
   }
 }
 
-// ---- 环境贴图 ----
+// ---- 增强环境贴图 ----
 function createEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer)
   const c = document.createElement('canvas')
   c.width = 512; c.height = 256
   const ctx = c.getContext('2d')!
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, 180)
-  skyGrad.addColorStop(0, '#ffffff')
-  skyGrad.addColorStop(0.3, '#e8ecf4')
-  skyGrad.addColorStop(0.6, '#c8ccd8')
-  skyGrad.addColorStop(1, '#a0a4b0')
-  ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, 512, 180)
-  const groundGrad = ctx.createLinearGradient(0, 180, 0, 256)
-  groundGrad.addColorStop(0, '#909090')
-  groundGrad.addColorStop(1, '#606060')
-  ctx.fillStyle = groundGrad; ctx.fillRect(0, 180, 512, 76)
-  ctx.fillStyle = 'rgba(255,255,255,0.08)'
-  ctx.fillRect(50, 10, 80, 120); ctx.fillRect(200, 30, 100, 100); ctx.fillRect(380, 20, 70, 110)
+  // 多层渐变模拟工作室灯光
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, 170)
+  skyGrad.addColorStop(0, '#fafcff'); skyGrad.addColorStop(0.15, '#eef2f8')
+  skyGrad.addColorStop(0.35, '#dde4f0'); skyGrad.addColorStop(0.6, '#c8d0e0')
+  skyGrad.addColorStop(0.85, '#b0b8c8'); skyGrad.addColorStop(1, '#98a0b0')
+  ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, 512, 170)
+  const gnd = ctx.createLinearGradient(0, 170, 0, 256)
+  gnd.addColorStop(0, '#888888'); gnd.addColorStop(0.5, '#707070'); gnd.addColorStop(1, '#505050')
+  ctx.fillStyle = gnd; ctx.fillRect(0, 170, 512, 86)
+  // 柔光箱亮斑
+  const boxes = [
+    { x: 80, y: 15, w: 100, h: 80, a: 0.12 }, { x: 220, y: 25, w: 80, h: 60, a: 0.08 },
+    { x: 340, y: 10, w: 90, h: 70, a: 0.10 }, { x: 60, y: 100, w: 60, h: 40, a: 0.05 },
+  ]
+  boxes.forEach(({ x, y, w, h, a }) => {
+    ctx.fillStyle = `rgba(255,255,255,${a})`
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 20); ctx.fill()
+  })
   const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.mapping = THREE.EquirectangularReflectionMapping
-  const rt = pmrem.fromEquirectangular(tex)
-  pmrem.dispose(); tex.dispose()
+  tex.colorSpace = THREE.SRGBColorSpace; tex.mapping = THREE.EquirectangularReflectionMapping
+  const rt = pmrem.fromEquirectangular(tex); pmrem.dispose(); tex.dispose()
   return rt.texture
+}
+
+// ---- roughness 贴图 ----
+function generateRoughnessMap(): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 256; c.height = 256
+  const ctx = c.getContext('2d')!
+  const imgData = ctx.createImageData(256, 256)
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    const v = 180 + Math.random() * 40
+    imgData.data[i] = v; imgData.data[i + 1] = v; imgData.data[i + 2] = v; imgData.data[i + 3] = 255
+  }
+  ctx.putImageData(imgData, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.LinearSRGBColorSpace; t.needsUpdate = true
+  return t
 }
 
 // ---- 异步加载纹理 ----
@@ -388,8 +408,9 @@ function useGoodsScene(
     function buildBadge(s: number, shape: string, roughness: number, metalness: number, baseColor: string, tex: THREE.Texture | null) {
       const group = state!.modelGroup
 
+      const roughnessMap = generateRoughnessMap()
       const designMat = new THREE.MeshPhysicalMaterial({
-        roughness, metalness, color: new THREE.Color(baseColor),
+        roughness, metalness, roughnessMap, color: new THREE.Color(baseColor),
         clearcoat: 0.3, clearcoatRoughness: 0.15,
       })
       if (tex) { designMat.map = tex; designMat.color.set('#ffffff') }
@@ -441,8 +462,9 @@ function useGoodsScene(
       const group = state!.modelGroup
       const d = 0.28
 
+      const roughnessMap = generateRoughnessMap()
       const acrylicMat = new THREE.MeshPhysicalMaterial({
-        roughness, metalness, color: new THREE.Color('#ffffff'),
+        roughness, metalness, roughnessMap, color: new THREE.Color('#ffffff'),
         transparent: true, opacity: 0.88, clearcoat: 0.15,
         specularIntensity: 0.5, specularColor: new THREE.Color('#ffffff'),
       })
@@ -480,8 +502,9 @@ function useGoodsScene(
       const group = state!.modelGroup
       const d = 0.03
 
+      const roughnessMap = generateRoughnessMap()
       const mat = new THREE.MeshPhysicalMaterial({
-        roughness, metalness, color: new THREE.Color(baseColor),
+        roughness, metalness, roughnessMap, color: new THREE.Color(baseColor),
         clearcoat: 0.2, clearcoatRoughness: 0.2,
       })
       if (tex) { mat.map = tex; mat.color.set('#ffffff') }
@@ -511,8 +534,9 @@ function useGoodsScene(
       const group = state!.modelGroup
       const d = 0.2
 
+      const roughnessMap = generateRoughnessMap()
       const mat = new THREE.MeshStandardMaterial({
-        roughness, metalness: 0, color: new THREE.Color(baseColor),
+        roughness, metalness: 0, roughnessMap, color: new THREE.Color(baseColor),
       })
       if (tex) { mat.map = tex; mat.color.set('#ffffff') }
 

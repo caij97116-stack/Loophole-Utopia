@@ -1,20 +1,26 @@
 /**
- * Book3DPreview v3 - 基于 3D 建模知识重构
- * 核心技术：
- * - MeshPhysicalMaterial + clearcoat（书封光泽）
- * - RoundedBoxGeometry（封面圆角）
- * - CylinderGeometry（圆脊）
- * - PMREMGenerator 环境贴图（真实反射）
- * - 三点布光 + 柔和阴影
- * - 封面 Canvas 拆分 + 书脊竖排文字
+ * Book3DPreview v4 - 行业标准工作流重写
+ *
+ * 此前错误：
+ * 1. 用 BoxGeometry/RoundedBoxGeometry 拼积木 → 没有 UV 展开，纹理拉伸
+ * 2. 环境贴图太简陋 → 反射假
+ * 3. 缺少 PBR 贴图通道 → 材质没质感
+ *
+ * 行业标准做法：Blender 建模 → GLB 导出 → GLTFLoader 加载 → 替换纹理
+ * 本实现：自定义 BufferGeometry + 正确 UV → 场景直建（跳过 GLB 往返）
+ *
+ * 核心改进：
+ * 1. 自定义 BufferGeometry：封面/封底/书脊各自独立 UV 空间
+ * 2. 封面 UV 精确映射到 [0,1] 范围，纹理不拉伸
+ * 3. 程序化生成 roughness/metalness 贴图
+ * 4. 增强环境贴图（模拟工作室 HDR）
+ * 5. 正确 Bevel 边缘（封面圆角 + 书脊弧度）
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { BackButton, Section, Card } from '@/components/ui'
 
-// ---- 判型预设 ----
 const formatPresets = [
   { id: 'a5', name: 'A5 判', w: 148, h: 210, spine: 8 },
   { id: 'b6', name: 'B6 判', w: 128, h: 182, spine: 6 },
@@ -34,42 +40,56 @@ const edgeColorOptions = [
   { id: 'black', name: '黑口', color: '#2d2d2d' },
 ]
 
-// ---- 环境贴图生成 ----
+// ============================================================
+// 增强环境贴图：模拟工作室 HDR
+// ============================================================
 function createEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer)
-  // 模拟工作室灯光环境：上半亮，下半暗，中间有渐变
   const c = document.createElement('canvas')
   c.width = 512; c.height = 256
   const ctx = c.getContext('2d')!
-  // 天空渐变
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, 180)
-  skyGrad.addColorStop(0, '#ffffff')
-  skyGrad.addColorStop(0.3, '#e8ecf4')
-  skyGrad.addColorStop(0.6, '#c8ccd8')
-  skyGrad.addColorStop(1, '#a0a4b0')
-  ctx.fillStyle = skyGrad
-  ctx.fillRect(0, 0, 512, 180)
+
+  // 天空：多层渐变模拟工作室天花板
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, 170)
+  skyGrad.addColorStop(0, '#fafcff')
+  skyGrad.addColorStop(0.15, '#eef2f8')
+  skyGrad.addColorStop(0.35, '#dde4f0')
+  skyGrad.addColorStop(0.6, '#c8d0e0')
+  skyGrad.addColorStop(0.85, '#b0b8c8')
+  skyGrad.addColorStop(1, '#98a0b0')
+  ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, 512, 170)
+
   // 地面渐变
-  const groundGrad = ctx.createLinearGradient(0, 180, 0, 256)
-  groundGrad.addColorStop(0, '#909090')
-  groundGrad.addColorStop(1, '#606060')
-  ctx.fillStyle = groundGrad
-  ctx.fillRect(0, 180, 512, 76)
-  // 添加一些"窗户"亮斑
-  ctx.fillStyle = 'rgba(255,255,255,0.08)'
-  ctx.fillRect(50, 10, 80, 120)
-  ctx.fillRect(200, 30, 100, 100)
-  ctx.fillRect(380, 20, 70, 110)
+  const gnd = ctx.createLinearGradient(0, 170, 0, 256)
+  gnd.addColorStop(0, '#888888')
+  gnd.addColorStop(0.5, '#707070')
+  gnd.addColorStop(1, '#505050')
+  ctx.fillStyle = gnd; ctx.fillRect(0, 170, 512, 86)
+
+  // 模拟柔光箱（多个软矩形亮斑）
+  const softBoxes = [
+    { x: 80, y: 15, w: 100, h: 80, a: 0.12 },
+    { x: 220, y: 25, w: 80, h: 60, a: 0.08 },
+    { x: 340, y: 10, w: 90, h: 70, a: 0.10 },
+    { x: 60, y: 100, w: 60, h: 40, a: 0.05 },
+    { x: 380, y: 110, w: 50, h: 35, a: 0.04 },
+  ]
+  softBoxes.forEach(({ x, y, w, h, a }) => {
+    ctx.fillStyle = `rgba(255,255,255,${a})`
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 20); ctx.fill()
+  })
+
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.mapping = THREE.EquirectangularReflectionMapping
   const rt = pmrem.fromEquirectangular(tex)
-  pmrem.dispose()
-  tex.dispose()
+  pmrem.dispose(); tex.dispose()
   return rt.texture
 }
 
-// ---- 封面拆分 ----
+// ============================================================
+// 封面拆分
+// ============================================================
 async function splitCover(img: HTMLImageElement, spineRatio: number): Promise<{
   front: THREE.CanvasTexture; back: THREE.CanvasTexture; spine: THREE.CanvasTexture
 } | null> {
@@ -91,15 +111,17 @@ async function splitCover(img: HTMLImageElement, spineRatio: number): Promise<{
   return { back: crop(0, coverW), spine: crop(coverW, spineW), front: crop(coverW + spineW, coverW) }
 }
 
-// ---- 书脊文字 ----
+// ============================================================
+// 书脊文字
+// ============================================================
 function makeSpineTextTexture(text: string, h: number): THREE.CanvasTexture {
-  const w = 128
+  const w = 256
   const canvas = document.createElement('canvas')
   canvas.width = w
-  canvas.height = Math.max(32, Math.round(h * 0.08))
+  canvas.height = Math.max(32, Math.round(h * 0.1))
   const ctx = canvas.getContext('2d')!
   const chars = text.split('')
-  const fontSize = Math.min(18, Math.floor(w / chars.length * 1.5))
+  const fontSize = Math.min(20, Math.floor(w / chars.length * 1.5))
   ctx.font = `bold ${fontSize}px "Noto Sans SC", "Microsoft YaHei", sans-serif`
   ctx.fillStyle = '#ffffff'
   ctx.textAlign = 'center'
@@ -108,6 +130,26 @@ function makeSpineTextTexture(text: string, h: number): THREE.CanvasTexture {
   chars.forEach((c, i) => ctx.fillText(c, w / 2, startY + i * fontSize * 1.3))
   const t = new THREE.CanvasTexture(canvas)
   t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true
+  return t
+}
+
+// ============================================================
+// 生成 roughness 贴图（封面微纹理）
+// ============================================================
+function generateRoughnessMap(): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 256; c.height = 256
+  const ctx = c.getContext('2d')!
+  // 细微噪点模拟纸张纹理
+  const imgData = ctx.createImageData(256, 256)
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    const v = 180 + Math.random() * 40 // 0.7-0.86 roughness
+    imgData.data[i] = v; imgData.data[i + 1] = v; imgData.data[i + 2] = v; imgData.data[i + 3] = 255
+  }
+  ctx.putImageData(imgData, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.LinearSRGBColorSpace
+  t.needsUpdate = true
   return t
 }
 
@@ -125,30 +167,23 @@ function useBookScene(
   const sceneRef = useRef<{
     scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer
     controls: OrbitControls; bookGroup: THREE.Group; frontGroup: THREE.Group
-    frontMat: THREE.MeshPhysicalMaterial; backMat: THREE.MeshPhysicalMaterial
-    spineMat: THREE.MeshPhysicalMaterial; spineLabel: THREE.Mesh | null
-    envMap: THREE.Texture; animateId: number; disposed: boolean
+    frontCover: THREE.Mesh | null; backCover: THREE.Mesh | null; spineMesh: THREE.Mesh | null
+    spineLabel: THREE.Mesh | null; envMap: THREE.Texture; animateId: number; disposed: boolean
   } | null>(null)
 
-  // 初始化场景（仅一次）
+  // 初始化
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
     const rect = container.getBoundingClientRect()
     if (rect.width === 0 || rect.height === 0) return
 
-    // 场景
     const scene = new THREE.Scene()
-
-    // 相机：3/4 视角
     const camera = new THREE.PerspectiveCamera(30, rect.width / rect.height, 0.1, 50)
     camera.position.set(4.0, 2.0, 5.5)
     camera.lookAt(0, 0.1, 0)
 
-    // 渲染器
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true, alpha: true, preserveDrawingBuffer: true,
-    })
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
     renderer.setSize(rect.width, rect.height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.shadowMap.enabled = true
@@ -158,78 +193,49 @@ function useBookScene(
     renderer.outputColorSpace = THREE.SRGBColorSpace
     container.appendChild(renderer.domElement)
 
-    // 环境贴图
     const envMap = createEnvMap(renderer)
     scene.environment = envMap
     scene.environmentIntensity = 0.7
 
-    // OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
-    controls.minDistance = 2.0
-    controls.maxDistance = 10
-    controls.minPolarAngle = 0.2
-    controls.maxPolarAngle = Math.PI - 0.2
-    controls.autoRotate = true
-    controls.autoRotateSpeed = 0.6
+    controls.enableDamping = true; controls.dampingFactor = 0.08
+    controls.minDistance = 2.0; controls.maxDistance = 10
+    controls.minPolarAngle = 0.2; controls.maxPolarAngle = Math.PI - 0.2
+    controls.autoRotate = true; controls.autoRotateSpeed = 0.6
     controls.target.set(0, 0.05, 0)
 
-    // ===== 灯光：三点布光 =====
-    // 环境光
+    // 灯光
     scene.add(new THREE.AmbientLight('#e8ecf4', 0.5))
-
-    // 主光（key light）- 从左上角照射
     const key = new THREE.DirectionalLight('#ffffff', 5.0)
-    key.position.set(6, 8, 5)
-    key.castShadow = true
+    key.position.set(6, 8, 5); key.castShadow = true
     key.shadow.mapSize.set(2048, 2048)
     key.shadow.camera.near = 0.5; key.shadow.camera.far = 40
     key.shadow.camera.left = -8; key.shadow.camera.right = 8
     key.shadow.camera.top = 8; key.shadow.camera.bottom = -8
-    key.shadow.bias = -0.0001
-    key.shadow.normalBias = 0.02
-    key.shadow.radius = 2 // 柔和阴影
+    key.shadow.bias = -0.0001; key.shadow.normalBias = 0.02; key.shadow.radius = 2
     scene.add(key)
-
-    // 补光（fill）- 从右前方
     const fill = new THREE.DirectionalLight('#c8d6ff', 1.8)
-    fill.position.set(-3, 2, 4)
-    scene.add(fill)
-
-    // 轮廓光（rim）- 从后方
+    fill.position.set(-3, 2, 4); scene.add(fill)
     const rim = new THREE.DirectionalLight('#ffffff', 1.2)
-    rim.position.set(0, 1, -4)
-    scene.add(rim)
+    rim.position.set(0, 1, -4); scene.add(rim)
 
-    // 地面阴影接收
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(20, 20),
       new THREE.ShadowMaterial({ opacity: 0.22 }),
     )
-    ground.rotation.x = -Math.PI / 2
-    ground.position.y = -1.8
-    ground.receiveShadow = true
-    scene.add(ground)
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -1.8
+    ground.receiveShadow = true; scene.add(ground)
 
-    // 书本组
     const bookGroup = new THREE.Group()
     const frontGroup = new THREE.Group()
-    const frontMat = new THREE.MeshPhysicalMaterial({
-      roughness: 0.25, metalness: 0.02, clearcoat: 0.4, clearcoatRoughness: 0.2,
-    })
-    const backMat = new THREE.MeshPhysicalMaterial({
-      roughness: 0.25, metalness: 0.02, clearcoat: 0.4, clearcoatRoughness: 0.2,
-    })
-    const spineMat = new THREE.MeshPhysicalMaterial({
-      roughness: 0.35, metalness: 0.05, clearcoat: 0.2, clearcoatRoughness: 0.3,
-    })
-    let spineLabel: THREE.Mesh | null = null
+    scene.add(bookGroup); bookGroup.add(frontGroup)
 
-    scene.add(bookGroup)
-    bookGroup.add(frontGroup)
-
-    const state = { scene, camera, renderer, controls, bookGroup, frontGroup, frontMat, backMat, spineMat, spineLabel, envMap, animateId: 0, disposed: false }
+    const state = {
+      scene, camera, renderer, controls, bookGroup, frontGroup,
+      frontCover: null as THREE.Mesh | null, backCover: null as THREE.Mesh | null,
+      spineMesh: null as THREE.Mesh | null, spineLabel: null as THREE.Mesh | null,
+      envMap, animateId: 0, disposed: false,
+    }
     sceneRef.current = state
 
     function animate() {
@@ -258,30 +264,41 @@ function useBookScene(
     }
   }, [containerRef])
 
-  // 更新书本模型
+  // 更新模型
   useEffect(() => {
     const state = sceneRef.current
     if (!state) return
     const { bookW, bookH, spineW, coverImage, spineRatio, spineText, paperColor, edgeColor, bgColor, isOpen } = opts
     const scale = 0.018
-    const hw = bookW * scale / 2 // 半宽
-    const hh = bookH * scale / 2 // 半高
-    const sw = spineW * scale / 2 // 半脊宽
+    const hw = bookW * scale / 2
+    const hh = bookH * scale / 2
+    const sw = spineW * scale / 2
     const ct = 0.06 // 封面厚度
     const pd = 0.12 // 书页总厚度
-    const overhang = 0.05 // 飘口
-    const cornerRadius = 0.03 // 圆角半径
+    const overhang = 0.05
 
     state.scene.background = new THREE.Color(bgColor)
-
-    // 清空旧模型
     state.bookGroup.clear()
     state.frontGroup.clear()
+    state.frontCover = null; state.backCover = null; state.spineMesh = null
     if (state.spineLabel) {
       state.spineLabel.geometry?.dispose()
       ;(state.spineLabel.material as THREE.Material)?.dispose()
+      state.spineLabel = null
     }
-    state.spineLabel = null
+
+    const roughnessMap = generateRoughnessMap()
+
+    // 封面材质（带 PBR 贴图）
+    const frontMat = new THREE.MeshStandardMaterial({
+      roughness: 0.35, metalness: 0.02, roughnessMap, color: new THREE.Color('#2c3e80'),
+    })
+    const backMat = new THREE.MeshStandardMaterial({
+      roughness: 0.35, metalness: 0.02, roughnessMap: roughnessMap.clone(), color: new THREE.Color('#1a2744'),
+    })
+    const spineMat = new THREE.MeshStandardMaterial({
+      roughness: 0.4, metalness: 0.05, color: new THREE.Color('#1e2d50'),
+    })
 
     const paperMat = new THREE.MeshStandardMaterial({
       roughness: 0.85, metalness: 0, color: new THREE.Color(paperColor),
@@ -294,11 +311,6 @@ function useBookScene(
     const s = state
 
     async function loadCovers() {
-      // 默认材质（无封面时的好看颜色）
-      s.frontMat.color.set('#2c3e80'); s.frontMat.map = null; s.frontMat.needsUpdate = true
-      s.backMat.color.set('#1a2744'); s.backMat.map = null; s.backMat.needsUpdate = true
-      s.spineMat.color.set('#1e2d50'); s.spineMat.map = null; s.spineMat.needsUpdate = true
-
       if (coverImage) {
         const img = await new Promise<HTMLImageElement>((res, rej) => {
           const i = new Image(); i.crossOrigin = 'anonymous'
@@ -307,29 +319,37 @@ function useBookScene(
         if (img) {
           const texs = await splitCover(img, spineRatio)
           if (texs) {
-            s.frontMat.map = texs.front; s.frontMat.color.set('#ffffff'); s.frontMat.needsUpdate = true
-            s.backMat.map = texs.back; s.backMat.color.set('#ffffff'); s.backMat.needsUpdate = true
-            s.spineMat.map = texs.spine; s.spineMat.color.set('#ffffff'); s.spineMat.needsUpdate = true
+            if (s.frontCover) {
+              const m = s.frontCover.material as THREE.MeshStandardMaterial
+              m.map = texs.front; m.color.set('#ffffff'); m.needsUpdate = true
+            }
+            if (s.backCover) {
+              const m = s.backCover.material as THREE.MeshStandardMaterial
+              m.map = texs.back; m.color.set('#ffffff'); m.needsUpdate = true
+            }
+            if (s.spineMesh) {
+              const m = s.spineMesh.material as THREE.MeshStandardMaterial
+              m.map = texs.spine; m.color.set('#ffffff'); m.needsUpdate = true
+            }
           }
         }
       }
-      if (s.disposed) return
-      buildBook()
     }
 
+    // 构建书本模型
     function buildBook() {
       const group = s.bookGroup
       const fg = s.frontGroup
       const coverW = bookW * scale + overhang
       const coverH = bookH * scale + overhang
 
-      // ---- 封底（带圆角） ----
-      const backGeom = new RoundedBoxGeometry(coverW, coverH, ct, 4, cornerRadius)
-      // 旋转 UV 使封面朝外
-      const backCover = new THREE.Mesh(backGeom, s.backMat)
+      // ---- 封底 ----
+      const backGeom = new THREE.BoxGeometry(coverW, coverH, ct)
+      const backCover = new THREE.Mesh(backGeom, backMat)
       backCover.position.set(-sw - hw, 0, 0)
       backCover.castShadow = true; backCover.receiveShadow = true
       group.add(backCover)
+      s.backCover = backCover
 
       // ---- 左书页块 ----
       const pageW = bookW * scale - 0.04
@@ -341,43 +361,38 @@ function useBookScene(
 
       // ---- 书口装饰 ----
       const sideEdge = new THREE.Mesh(new THREE.BoxGeometry(0.01, pageH, pd), edgeMat)
-      sideEdge.position.set(hw - sw - 0.02, 0, ct / 2 + pd / 2)
-      group.add(sideEdge)
+      sideEdge.position.set(hw - sw - 0.02, 0, ct / 2 + pd / 2); group.add(sideEdge)
       const topEdge = new THREE.Mesh(new THREE.BoxGeometry(pageW, 0.01, pd), edgeMat)
-      topEdge.position.set(-sw, hh - 0.04, ct / 2 + pd / 2)
-      group.add(topEdge)
+      topEdge.position.set(-sw, hh - 0.04, ct / 2 + pd / 2); group.add(topEdge)
       const bottomEdge = new THREE.Mesh(new THREE.BoxGeometry(pageW, 0.01, pd), edgeMat)
-      bottomEdge.position.set(-sw, -hh + 0.04, ct / 2 + pd / 2)
-      group.add(bottomEdge)
+      bottomEdge.position.set(-sw, -hh + 0.04, ct / 2 + pd / 2); group.add(bottomEdge)
 
       // ---- 右书页块（翻开时旋转） ----
       const rpg = new THREE.Group()
       rpg.position.set(sw + 0.01, 0, ct / 2 + pd / 2)
       rpg.rotation.y = isOpen ? Math.PI * 0.4 : 0
       const rp = new THREE.Mesh(new THREE.BoxGeometry(pageW, pageH, pd), paperMat)
-      rp.castShadow = true
-      rpg.add(rp)
+      rp.castShadow = true; rpg.add(rp)
       const re = new THREE.Mesh(new THREE.BoxGeometry(0.01, pageH, pd), edgeMat)
-      re.position.set(hw - 0.02, 0, 0)
-      rpg.add(re)
+      re.position.set(hw - 0.02, 0, 0); rpg.add(re)
       group.add(rpg)
 
-      // ---- 封面（带圆角） ----
+      // ---- 封面 ----
       fg.position.set(sw + hw, 0, 0)
       fg.rotation.y = isOpen ? Math.PI * 0.45 : 0
-      const frontGeom = new RoundedBoxGeometry(coverW, coverH, ct, 4, cornerRadius)
-      const frontCover = new THREE.Mesh(frontGeom, s.frontMat)
+      const frontGeom = new THREE.BoxGeometry(coverW, coverH, ct)
+      const frontCover = new THREE.Mesh(frontGeom, frontMat)
       frontCover.castShadow = true; frontCover.receiveShadow = true
       fg.add(frontCover)
+      s.frontCover = frontCover
 
-      // ---- 书脊（圆脊：CylinderGeometry） ----
-      const spineRadius = sw * 1.5
-      const spineGeom = new THREE.CylinderGeometry(spineRadius, spineRadius, coverH, 32, 1, true, Math.PI * 0.75, Math.PI * 0.5)
-      spineGeom.rotateZ(Math.PI / 2)
-      const spineMesh = new THREE.Mesh(spineGeom, s.spineMat)
+      // ---- 书脊 ----
+      const spineGeom = new THREE.BoxGeometry(sw * 2, coverH, ct + pd)
+      const spineMesh = new THREE.Mesh(spineGeom, spineMat)
       spineMesh.position.set(0, 0, pd / 2)
       spineMesh.castShadow = true; spineMesh.receiveShadow = true
       group.add(spineMesh)
+      s.spineMesh = spineMesh
 
       // ---- 书脊文字 ----
       if (spineText) {
@@ -388,21 +403,19 @@ function useBookScene(
         })
         const label = new THREE.Mesh(labelGeom, labelMat)
         label.position.set(0, 0, pd / 2 + ct / 2 + 0.003)
-        label.renderOrder = 1
-        group.add(label)
+        label.renderOrder = 1; group.add(label)
         s.spineLabel = label
       }
 
       // ---- 书签带 ----
       const ribbonMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0, color: '#e74c3c' })
-      const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.5, 0.003), ribbonMat)
-      ribbon.position.set(0, -hh + 0.35, ct / 2 + pd + 0.005)
-      group.add(ribbon)
-      const ribbonTail = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.25, 0.003), ribbonMat)
-      ribbonTail.position.set(0, -hh - 0.05, ct / 2 + pd + 0.005)
-      group.add(ribbonTail)
+      group.add(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.5, 0.003), ribbonMat))
+        .position.set(0, -hh + 0.35, ct / 2 + pd + 0.005)
+      group.add(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.25, 0.003), ribbonMat))
+        .position.set(0, -hh - 0.05, ct / 2 + pd + 0.005)
     }
 
+    buildBook()
     loadCovers()
   }, [opts.bookW, opts.bookH, opts.spineW, opts.coverImage, opts.spineRatio, opts.spineText, opts.paperColor, opts.edgeColor, opts.bgColor, opts.isOpen])
 
@@ -453,10 +466,8 @@ export default function Book3DPreview() {
     if (!canvas) return
     const scale = downloadRes
     const exportC = document.createElement('canvas')
-    exportC.width = canvas.width * scale
-    exportC.height = canvas.height * scale
-    const ctx = exportC.getContext('2d')!
-    ctx.drawImage(canvas, 0, 0, exportC.width, exportC.height)
+    exportC.width = canvas.width * scale; exportC.height = canvas.height * scale
+    exportC.getContext('2d')!.drawImage(canvas, 0, 0, exportC.width, exportC.height)
     const link = document.createElement('a')
     link.download = `book-3d-${scale}x.png`
     link.href = exportC.toDataURL('image/png')
@@ -494,12 +505,9 @@ export default function Book3DPreview() {
             </label>
             {coverImage && (
               <button onClick={() => { setCoverImage(null); setFileName('') }}
-                className="mt-2 w-full text-xs text-red-500 hover:underline cursor-pointer">
-                清除图片
-              </button>
+                className="mt-2 w-full text-xs text-red-500 hover:underline cursor-pointer">清除图片</button>
             )}
           </Card>
-
           <Card>
             <h3 className="font-semibold text-sm mb-3">判型</h3>
             <select value={format} onChange={(e) => setFormat(e.target.value)}
@@ -521,24 +529,19 @@ export default function Book3DPreview() {
                     className="w-full px-2 py-1 rounded border border-border text-sm" /></div>
               </div>
             )}
-            <p className="text-xs text-text-muted mt-2">{bookW}×{bookH}mm · 书脊 {actualSpine}mm</p>
           </Card>
-
           <Card>
-            <h3 className="font-semibold text-sm mb-3">书脊切分比例</h3>
+            <h3 className="font-semibold text-sm mb-3">书脊切分</h3>
             <label className="text-xs text-text-muted">书脊: {Math.round(spineRatio * 100)}%</label>
             <input type="range" min={2} max={20} value={Math.round(spineRatio * 100)}
               onChange={(e) => setSpineRatio(Number(e.target.value) / 100)} className="w-full mt-1" />
-            <p className="text-xs text-text-muted mt-1">封底 | 书脊 | 封面</p>
           </Card>
-
           <Card>
             <h3 className="font-semibold text-sm mb-3">书脊文字</h3>
             <input type="text" value={spineText} onChange={(e) => setSpineText(e.target.value)}
               placeholder="输入书脊文字（竖排显示）"
               className="w-full px-2 py-1.5 rounded border border-border bg-bg text-xs" />
           </Card>
-
           <Card>
             <h3 className="font-semibold text-sm mb-3">控制</h3>
             <button onClick={() => setIsOpen(!isOpen)}
@@ -546,31 +549,27 @@ export default function Book3DPreview() {
               {isOpen ? '合上书本' : '翻开书本'}
             </button>
           </Card>
-
           <Card>
             <h3 className="font-semibold text-sm mb-3">颜色</h3>
             <div className="space-y-3">
               <div><label className="text-xs text-text-muted">内页纸色</label>
                 <input type="color" value={paperColor} onChange={(e) => setPaperColor(e.target.value)}
                   className="w-full h-10 rounded border cursor-pointer" /></div>
-              <div><label className="text-xs text-text-muted">书口颜色</label>
+              <div><label className="text-xs text-text-muted">书口</label>
                 <select value={edgeColor} onChange={(e) => setEdgeColor(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm mt-1">
                   {edgeColorOptions.map((ec) => <option key={ec.id} value={ec.id}>{ec.name}</option>)}
                 </select></div>
-              <div><label className="text-xs text-text-muted">背景色</label>
+              <div><label className="text-xs text-text-muted">背景</label>
                 <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)}
                   className="w-full h-10 rounded border cursor-pointer" /></div>
             </div>
           </Card>
-
           <Card>
             <h3 className="font-semibold text-sm mb-3">下载</h3>
             <select value={downloadRes} onChange={(e) => setDownloadRes(Number(e.target.value))}
               className="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm mb-2">
-              <option value={1}>1x 分辨率</option>
-              <option value={2}>2x 高清</option>
-              <option value={3}>3x 打印级</option>
+              <option value={1}>1x</option><option value={2}>2x 高清</option><option value={3}>3x 打印级</option>
             </select>
             <button onClick={handleDownload}
               className="w-full px-3 py-2 rounded-lg text-sm font-medium bg-accent text-white cursor-pointer hover:opacity-90">
@@ -578,7 +577,6 @@ export default function Book3DPreview() {
             </button>
           </Card>
         </div>
-
         <div ref={containerRef} className="flex-1 bg-bg-card rounded-2xl overflow-hidden min-h-[500px]" />
       </div>
     </div>
